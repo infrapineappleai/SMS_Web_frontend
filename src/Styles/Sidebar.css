@@ -1,16 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap');
 
-
+ 
 .sidebar {
   width: 275px;
   height: 100vh;
   position: fixed;
-  top: 0;
   left: 0;
-  z-index: 10;
-  background-color: rgba(211, 211, 211, 0.1);
-  border-top: 5px solid #1F6978;
-  padding: 5px 30px 30px 30px;
+  background: rgba(211, 211, 211, 0.15); 
+  padding: 05px 30px 30px 30px;
+  
+  
 }
 
 .sidebar-close-btn {
@@ -105,15 +104,27 @@
 .course-icon { width: 16px; height: 20.52px; margin-top: 2px; margin-left: 4px; }
 .payment-icon { width: 20px; height: 20px; margin-top: 2.2px; margin-left: 2px; }
 .exam-icon { width: 16px; height: 20px; margin-top: 2.2px; margin-left: 4px; }
+.schedule-icon { width: 18.08px; height: 18px; margin-top: 2.2px; margin-left: 4px; }
 .report-icon { width: 16px; height: 20px; margin-top: 2px; margin-left: 4px; }
 .settings-icon { width: 20.97px; height: 20.97px; margin-top: 1.51px; margin-left: 1.51px; }
 .logout-icon { width: 16.83px; height: 18px; margin-top: 3px; margin-left: 4px; }
 
 @media (max-width: 768px) {
   .sidebar {
-    width: 200px;
+    width: 275px;
   }
   .menu-item {
     font-size: 14px;
+  }
+}
+@media (max-width: 768px) {
+  .sidebar {
+    width: 275px;
+    padding: 20px;
+  }
+
+  .menu-item {
+    font-size: 14px;
+    padding: 10px 20px;
   }
 }
