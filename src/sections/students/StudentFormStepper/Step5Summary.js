@@ -1,22 +1,90 @@
+
+
+
+
+
+
 import React from 'react';
 import Modal from 'react-modal';
 import '../../../Styles/Students-css/SummaryPopup.css';
-
 import CloseIcon from '../../../assets/icons/Close.png';
 import UserIcon from '../../../assets/icons/User.png';
 import AddressIcon from '../../../assets/icons/Address.png';
 import CalendarIcon from '../../../assets/icons/Calendar2.png';
 import GenderIcon from '../../../assets/icons/Gender.png';
 import EmailIcon from '../../../assets/icons/Email.png';
-import WhatsAppIcon from '../../../assets/icons/WhatsApp.png';
 import PhoneIcon from '../../../assets/icons/Phone.png';
 import BranchIcon from '../../../assets/icons/Branch.png';
 import StudentIcon from '../../../assets/icons/Student.png';
-import CurrencyIcon from '../../../assets/icons/currency.png';
+import { useToast } from '../../../modals/ToastProvider';
+import { createStudent, updateStudent } from '../../../integration/studentAPI';
 
+// Set appElement once
+if (typeof document !== 'undefined') {
+  Modal.setAppElement('#root');
+}
 
-const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
+const safeString = (val) => (typeof val === 'string' && val.trim() !== '' ? val : 'N/A');
+
+const Step5Summary = ({ isOpen, onClose, studentData, onSave, onEdit }) => {
+  const { showToast } = useToast();
+
   if (!isOpen || !studentData) return null;
+
+  const assignedCourses = Array.isArray(studentData.assignedCourses) ? studentData.assignedCourses : [];
+  const schedules = Array.isArray(studentData.schedules) ? studentData.schedules : [];
+  const latestSchedule = schedules.length > 0 ? schedules[schedules.length - 1] : {};
+  const firstAssigned = assignedCourses.length > 0 ? assignedCourses[0] : {};
+
+  const handleSave = async () => {
+    try {
+      console.log('Save button clicked with studentData:', JSON.stringify(studentData, null, 2));
+
+      const payload = {
+        first_name: studentData.first_name || '',
+        last_name: studentData.last_name || '',
+        email: studentData.email || '',
+        phn_num: studentData.phn_num || '',
+        ece_conduct: studentData.ece_conduct || studentData.phn_num || '',
+        address: studentData.address || '',
+        gender: studentData.gender || '',
+        date_of_birth: studentData.date_of_birth || '',
+        student_no: studentData.student_no || '',
+        status: (studentData.status || 'active').toLowerCase(),
+        course: studentData.course || firstAssigned.course || '',
+        grade: studentData.grade || firstAssigned.grade || '',
+        branch: studentData.branch || latestSchedule.branch || '',
+        schedule_day: latestSchedule.day || '',
+        schedule_time: latestSchedule.time || '',
+        photoFile: studentData.photoFile
+      };
+
+      let response;
+      if (studentData.id || studentData.user_id) {
+        const id = studentData.id || studentData.user_id;
+        response = await updateStudent(id, payload);
+        showToast({ title: 'Success', message: 'Student updated successfully!' });
+      } else {
+        response = await createStudent(studentData);
+        showToast({ title: 'Success', message: 'Student created successfully!' });
+      }
+
+      console.log('Save response:', response);
+      onSave?.(response);
+      onClose?.();
+    } catch (error) {
+      console.error('Error saving student:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      showToast({
+        title: 'Error',
+        message: error.message || 'Failed to save student',
+        isError: true
+      });
+    }
+  };
 
   return (
     <Modal
@@ -24,20 +92,20 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
       onRequestClose={onClose}
       className="summary-modal"
       overlayClassName="modal-overlay"
-      ariaHideApp={false}
+      ariaHideApp={true}
     >
       <div className="summary-container scrollable">
+        <button className="close-btn" onClick={onClose} aria-label="Close Summary Popup">
+          <img src={CloseIcon} alt="Close" />
+        </button>
 
-          <button className="close-btn" onClick={onClose} aria-label="Close Summary Popup">
-    <img src={CloseIcon} alt="Close" />
-  </button>
-  
         <div className="summary-header-bg">
           <div className="summary-header"></div>
           <img
-            src={studentData.profileImage || 'https://i.pravatar.cc/120?img=1'}
+            src={studentData.photo_url || 'https://example.com/default-avatar.png'}
             alt="Profile"
             className="profile-pic-round"
+            onError={(e) => { e.target.src = '/default-avatar.png'; }}
           />
           <h2>Student Details</h2>
         </div>
@@ -51,7 +119,9 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <span>Full Name</span>
               </div>
               <div className="info-value">
-                {studentData.name || `${studentData.salutation || ''} ${studentData.fullName || ''}`.trim() || 'N/A'}
+                {studentData.name?.trim() ||
+                  `${studentData.first_name || ''} ${studentData.last_name || ''}`.trim() ||
+                  'N/A'}
               </div>
             </div>
 
@@ -60,7 +130,7 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <img src={AddressIcon} alt="Address" className="icon" />
                 <span>Address</span>
               </div>
-              <div className="info-value">{studentData.address || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.address)}</div>
             </div>
 
             <div className="info-block">
@@ -68,7 +138,7 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <img src={CalendarIcon} alt="DOB" className="icon" />
                 <span>Date of Birth</span>
               </div>
-              <div className="info-value">{studentData.dob || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.date_of_birth)}</div>
             </div>
 
             <div className="info-block">
@@ -76,7 +146,7 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <img src={GenderIcon} alt="Gender" className="icon" />
                 <span>Gender</span>
               </div>
-              <div className="info-value">{studentData.gender || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.gender)}</div>
             </div>
           </div>
         </section>
@@ -86,33 +156,41 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
           <div className="info-2col">
             <div className="info-block">
               <div className="info-label">
+                <img src={PhoneIcon} alt="Phone" className="icon" />
+                <span>Phone Number</span>
+              </div>
+              <div className="info-value">{safeString(studentData.phn_num)}</div>
+            </div>
+
+            <div className="info-block">
+              <div className="info-label">
+                <img src={PhoneIcon} alt="ICE Contact" className="icon" />
+                <span>ICE Contact</span>
+              </div>
+              <div className="info-value">{safeString(studentData.ice_contact)}</div>
+            </div>
+
+            <div className="info-block">
+              <div className="info-label">
                 <img src={EmailIcon} alt="Email" className="icon" />
                 <span>Email Address</span>
               </div>
-              <div className="info-value">{studentData.email || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.email)}</div>
             </div>
 
             <div className="info-block">
               <div className="info-label">
-                <img src={WhatsAppIcon} alt="WhatsApp" className="icon" />
-                <span>WhatsApp Number</span>
+                <img src={AddressIcon} alt="Address" className="icon" />
+                <span>Address</span>
               </div>
-              <div className="info-value">{studentData.whatsapp || 'N/A'}</div>
-            </div>
-
-            <div className="info-block">
-              <div className="info-label">
-                <img src={PhoneIcon} alt="Phone" className="icon" />
-                <span>ICE Contact</span>
-              </div>
-              <div className="info-value">{studentData.iceContact || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.address)}</div>
             </div>
           </div>
         </section>
 
-<section className="summary-section scrollable-section">
-  <h3>Educational Records</h3>
-  <div className="scroll-table">
+        <section className="summary-section scrollable-section">
+          <h3>Educational Records</h3>
+          <div className="scroll-table">
             <table>
               <thead>
                 <tr>
@@ -121,14 +199,20 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 </tr>
               </thead>
               <tbody>
-                {(studentData.assignedCourses || []).map((c, i) => (
-                  <tr key={i}>
-                    <td>{c.course || 'N/A'}</td>
-                    <td>{c.grade || 'N/A'}</td>
+                {assignedCourses.length > 0 ? (
+                  assignedCourses.map((c, i) => {
+                    if (typeof c !== 'object' || c === null) return null;
+                    return (
+                      <tr key={i}>
+                        <td>{safeString(c.course)}</td>
+                        <td>{safeString(c.grade)}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="2">No courses assigned.</td>
                   </tr>
-                ))}
-                {(!studentData.assignedCourses || studentData.assignedCourses.length === 0) && (
-                  <tr><td colSpan="2">No courses assigned.</td></tr>
                 )}
               </tbody>
             </table>
@@ -143,7 +227,7 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <img src={BranchIcon} alt="Branch" className="icon" />
                 <span>Branch</span>
               </div>
-              <div className="info-value">{studentData.branch || 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.branch)}</div>
             </div>
 
             <div className="info-block">
@@ -151,21 +235,14 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 <img src={StudentIcon} alt="Student ID" className="icon" />
                 <span>Student ID</span>
               </div>
-              <div className="info-value">{studentData.studentId || 'N/A'}</div>
-            </div>
-
-            <div className="info-block">
-              <div className="info-label">
-                <img src={CurrencyIcon} alt="Admission Fee" className="icon" />
-                <span>Admission Fee</span>
-              </div>
-              <div className="info-value">{studentData.admissionFee ? `Rs. ${studentData.admissionFee}` : 'N/A'}</div>
+              <div className="info-value">{safeString(studentData.student_no)}</div>
             </div>
           </div>
         </section>
-<section className="summary-section scrollable-section">
-  <h3>Schedule</h3>
-  <div className="scroll-table">
+
+        <section className="summary-section scrollable-section">
+          <h3>Schedule</h3>
+          <div className="scroll-table">
             <table>
               <thead>
                 <tr>
@@ -174,14 +251,20 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
                 </tr>
               </thead>
               <tbody>
-                {(studentData.schedules || []).map((s, i) => (
-                  <tr key={i}>
-                    <td>{s.day || 'N/A'}</td>
-                    <td>{s.time || 'N/A'}</td>
+                {schedules.length > 0 ? (
+                  schedules.map((s, i) => {
+                    if (typeof s !== 'object' || s === null) return null;
+                    return (
+                      <tr key={i}>
+                        <td>{safeString(s.day)}</td>
+                        <td>{safeString(s.time)}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="2">No schedules available.</td>
                   </tr>
-                ))}
-                {(!studentData.schedules || studentData.schedules.length === 0) && (
-                  <tr><td colSpan="2">No schedules available.</td></tr>
                 )}
               </tbody>
             </table>
@@ -189,8 +272,24 @@ const Step5Summary = ({ isOpen, onClose, studentData, onSave }) => {
         </section>
 
         <div className="summary-buttons">
-          <button className="prev-btn" onClick={onClose}>Previous</button>
-          <button className="save-btn" onClick={onSave}>Save</button>
+          <button className="prev-btn" onClick={onClose}>
+            Close
+          </button>
+          {onSave && (
+            <button className="save-btn" onClick={handleSave}>
+              Save
+            </button>
+          )}
+          {onEdit && (
+            <button
+              className="edit-btn"
+              onClick={() => {
+                onEdit(studentData);
+              }}
+            >
+              Edit
+            </button>
+          )}
         </div>
       </div>
     </Modal>

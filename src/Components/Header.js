@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import NotificationIcon from '../assets/icons/Notification.png';
 import '../Styles/Header.css';
 
@@ -18,20 +18,9 @@ const routeTitles = {
 
 const Header = ({ onMenuClick }) => {
   const location = useLocation();
-  const navigate = useNavigate();
   const path = location.pathname;
   const pageTitle = routeTitles[path] || 'Dashboard';
   const isMobile = window.innerWidth <= 768;
-
-  const showSearch = ['/students', '/course', '/payments', '/schedule'].includes(path);
-  const showAddButton = ['/course', '/payments', '/schedule'].includes(path);
-  const showStateFilter = path === '/payments' || path === '/students';
-  const showPaymentFilter = path === '/students';
-  const showCourseFilter = path === '/students';
-
-  const handleAddClick = () => {
-    navigate('/students');
-  };
 
   return (
     <div className="content-header">
@@ -47,20 +36,6 @@ const Header = ({ onMenuClick }) => {
         </div>
       </div>
       <div></div>
-      
-      {(showSearch || showAddButton || showStateFilter || showPaymentFilter || showCourseFilter) && (
-        <div className="actions-row">
-          {showAddButton && (
-            <div className="add-btn-wrapper">
-              <button className="add-btn" onClick={handleAddClick}>
-                {path === '/course' && '+ Add Course'}
-                {path === '/payments' && '+ Add Payment'}
-                {path === '/schedule' && '+ Add Schedule'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

@@ -1,107 +1,107 @@
+
+
 import React, { useState, useEffect } from 'react';
 import '../../../Styles/Students-css/StudentFormStepper/Step4AcademicDetails.css';
 import FilterIcon from '../../../assets/icons/Filter.png';
-import Delete from '../../../assets/icons/Delete.png';
-import Edit from '../../../assets/icons/Edit.png';
-import ConfirmDeleteModal from '../../../modals/DeleteConfirmModal';
 import { useToast } from '../../../modals/ToastProvider';
+import { getDropdownOptions } from '../../../integration/studentAPI';
 
 const Step4AcademicDetails = ({ formData, onChange, errors }) => {
   const { showToast } = useToast();
-  const [scheduleInput, setScheduleInput] = useState({ branch: '', studentId: '', day: '', time: '' });
-  const [editId, setEditId] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
+  const [scheduleInput, setScheduleInput] = useState({
+    branch: formData.branch || '',
+    student_no: formData.student_no || '',
+    schedule_day: formData.schedule_day || '',
+    schedule_time: formData.schedule_time || ''
+  });
+  const [dropdownOptions, setDropdownOptions] = useState({ branches: [], slots: [], courses: [], grades: [] });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Step4AcademicDetails rendered with formData:', formData);
-    setScheduleInput(prev => ({
-      ...prev,
-      branch: formData.branch || '',
-      studentId: formData.studentId || ''
-    }));
-  }, [formData]);
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const options = await getDropdownOptions();
+        console.log('Step4: Received dropdown options:', JSON.stringify(options, null, 2));
+        setDropdownOptions({
+          branches: options.branches || [],
+          slots: options.slots || [],
+          courses: options.courses || [],
+          grades: options.grades || []
+        });
+        if (!options.branches.length || !options.slots.length) {
+          showToast({ title: 'Warning', message: 'No branches or slots available', isError: true });
+        }
+      } catch (error) {
+        console.error('Step4: Error fetching options:', error);
+        showToast({ title: 'Error', message: 'Failed to fetch branches/slots', isError: true });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOptions();
+  }, [showToast]);
 
   const handleInputChange = (e) => {
-    e.stopPropagation();
     const { name, value } = e.target;
-    setScheduleInput(prev => ({ ...prev, [name]: value }));
-    if (name === 'branch' || name === 'studentId') {
-      onChange({ [name]: value });
-    }
+    setScheduleInput(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'branch' || name === 'schedule_day') {
+        updated.schedule_time = ''; // Reset schedule_time when branch or day changes
+      }
+      return updated;
+    });
+    onChange({
+      ...formData,
+      [name]: value,
+      schedule_time: (name === 'branch' || name === 'schedule_day') ? '' : formData.schedule_time
+    });
   };
 
   const handleAssign = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    const { branch, studentId, day, time } = scheduleInput;
-
-    if (!day || !time) {
-      showToast({ title: 'Error', message: 'Day and Time are required', isError: true });
+    const { branch, student_no, schedule_day, schedule_time } = scheduleInput;
+    if (!branch || !student_no || !schedule_day || !schedule_time) {
+      showToast({ title: 'Error', message: 'Branch, Student ID, Schedule Day, and Schedule Time are required', isError: true });
       return;
     }
-
-    if (editId !== null) {
-      const updated = formData.schedules.map(item =>
-        item.id === editId ? { id: editId, branch, studentId, day, time } : item
-      );
-      console.log('Before onChange (Update):', formData.schedules);
-      onChange({ schedules: updated });
-      console.log('After onChange (Update):', updated);
-      showToast({ title: 'Success', message: 'Schedule updated successfully!' });
-    } else {
-      const newEntry = {
-        id: Date.now(),
-        branch,
-        studentId,
-        day,
-        time
-      };
-      const updatedSchedules = [...(formData.schedules || []), newEntry];
-      console.log('Before onChange (Assign):', formData.schedules);
-      onChange({ schedules: updatedSchedules });
-      console.log('After onChange (Assign):', updatedSchedules);
-      showToast({ title: 'Success', message: 'Schedule assigned successfully!' });
-    }
-
-    setScheduleInput(prev => ({ ...prev, day: '', time: '' }));
-    setEditId(null);
+    onChange({
+      ...formData,
+      branch,
+      student_no,
+      schedule_day,
+      schedule_time,
+      schedules: [...(formData.schedules || []), { id: Date.now(), branch, studentId: student_no, day: schedule_day, time: schedule_time }]
+    });
+    showToast({ title: 'Success', message: 'Schedule assigned successfully!' });
+    setScheduleInput(prev => ({ ...prev, schedule_day: '', schedule_time: '' }));
   };
 
-  const handleEdit = (e, id) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const item = formData.schedules.find(item => item.id === id);
-    setScheduleInput({ branch: item.branch, studentId: item.studentId, day: item.day, time: item.time });
-    setEditId(id);
-    console.log('Editing schedule with ID:', id);
-  };
+  const availableDays = [...new Set(dropdownOptions.slots
+    .filter(slot => {
+      const selectedBranch = dropdownOptions.branches.find(b => b.branch_name === scheduleInput.branch);
+      const matchesBranch = selectedBranch ? slot.branch_id === selectedBranch.id : true;
+      return matchesBranch && slot.day && slot.day !== '0000-00-00';
+    })
+    .map(slot => slot.day))]
+    .sort(); // Sort days for better UX
 
-  const confirmDelete = (e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    const updated = formData.schedules.filter(item => item.id !== deleteId);
-    console.log('Before onChange (Delete):', formData.schedules);
-    onChange({ schedules: updated });
-    console.log('After onChange (Delete):', updated);
-    setShowDeleteModal(false);
-    setDeleteId(null);
-    showToast({ title: 'Success', message: 'Schedule deleted successfully!', isDelete: true });
-    console.log('Deleted Successfully');
-  };
+  const filteredSlots = dropdownOptions.slots.filter(slot => {
+    const selectedBranch = dropdownOptions.branches.find(b => b.branch_name === scheduleInput.branch);
+    const matchesBranch = selectedBranch ? slot.branch_id === selectedBranch.id : true;
+    const matchesDay = scheduleInput.schedule_day ? slot.day === scheduleInput.schedule_day : true;
+    return matchesBranch && matchesDay && slot.time && slot.day && slot.day !== '0000-00-00';
+  });
 
-  const handleDeleteClick = (e, id) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDeleteId(id);
-    setShowDeleteModal(true);
-    console.log('Opening delete modal for ID:', id);
-  };
+  console.log('Step4: formData:', JSON.stringify(formData, null, 2));
+  console.log('Step4: scheduleInput:', JSON.stringify(scheduleInput, null, 2));
+  console.log('Step4: availableDays:', JSON.stringify(availableDays, null, 2));
+  console.log('Step4: filteredSlots:', JSON.stringify(filteredSlots, null, 2));
 
   return (
-    <div className="step-four-fields" onClick={(e) => e.stopPropagation()}>
+    <div className="step-four-fields">
+      <h3 className="section-header">Academic Details</h3>
+      {loading && <div>Loading options...</div>}
       <div className="form-row">
         <div className="form-group">
           <label className="input-label">Branch</label>
@@ -111,124 +111,100 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
               className="input-box with-icon"
               value={scheduleInput.branch}
               onChange={handleInputChange}
+              disabled={loading}
             >
               <option value="">Select Branch</option>
-              <option value="Main">Main</option>
-              <option value="Sub">Sub</option>
+              {dropdownOptions.branches.map(branch => (
+                <option key={branch.id} value={branch.branch_name}>{branch.branch_name}</option>
+              ))}
             </select>
             <img src={FilterIcon} alt="dropdown" className="input-icon dropdown-icon" />
           </div>
+          {errors.branch && <span className="error">{errors.branch}</span>}
         </div>
-
         <div className="form-group">
           <label className="input-label">Student ID</label>
           <input
-            name="studentId"
+            name="student_no"
             type="text"
             className="input-box"
-            value={scheduleInput.studentId}
+            value={scheduleInput.student_no}
+            placeholder="e.g. ST-001"
             onChange={handleInputChange}
           />
+          {errors.student_no && <span className="error">{errors.student_no}</span>}
         </div>
       </div>
-
       <div className="form-row">
         <div className="form-group">
           <label className="input-label">Schedule Day</label>
           <div className="input-icon-container">
             <select
-              name="day"
+              name="schedule_day"
               className="input-box with-icon"
-              value={scheduleInput.day}
+              value={scheduleInput.schedule_day}
               onChange={handleInputChange}
+              disabled={loading || !scheduleInput.branch || !availableDays.length}
             >
               <option value="">Select Day</option>
-              <option value="Monday">Monday</option>
-              <option value="Tuesday">Tuesday</option>
-              <option value="Wednesday">Wednesday</option>
-              <option value="Thursday">Thursday</option>
-              <option value="Friday">Friday</option>
-              <option value="Saturday">Saturday</option>
+              {availableDays.length > 0 ? (
+                availableDays.map(day => (
+                  <option key={day} value={day}>{day}</option>
+                ))
+              ) : (
+                <option value="" disabled>No available days for selected branch</option>
+              )}
             </select>
             <img src={FilterIcon} alt="dropdown" className="input-icon dropdown-icon" />
           </div>
+          {errors.schedule_day && <span className="error">{errors.schedule_day}</span>}
         </div>
-
         <div className="form-group">
           <label className="input-label">Schedule Time</label>
           <div className="input-icon-container">
             <select
-              name="time"
+              name="schedule_time"
               className="input-box with-icon"
-              value={scheduleInput.time}
+              value={scheduleInput.schedule_time}
               onChange={handleInputChange}
+              disabled={loading || !scheduleInput.branch || !scheduleInput.schedule_day || !filteredSlots.length}
             >
               <option value="">Select Time</option>
-              <option value="9:00 AM">9:00 AM</option>
-              <option value="11:00 AM">11:00 AM</option>
-              <option value="2:00 PM">2:00 PM</option>
-              <option value="4:00 PM">4:00 PM</option>
+              {filteredSlots.length > 0 ? (
+                filteredSlots.map(slot => (
+                  <option key={slot.id} value={slot.time}>{slot.time}</option>
+                ))
+              ) : (
+                <option value="" disabled>No available times for selected branch and day</option>
+              )}
             </select>
             <img src={FilterIcon} alt="dropdown" className="input-icon dropdown-icon" />
           </div>
+          {errors.schedule_time && <span className="error">{errors.schedule_time}</span>}
         </div>
       </div>
-
-      <button type="button" className="assign-btn" onClick={handleAssign}>
-        {editId !== null ? 'Update Schedule' : 'Assign Schedule'}
+      <button type="button" className="assign-btn" onClick={handleAssign} disabled={loading}>
+        Assign Schedule
       </button>
-
-      {errors?.schedules && <p className="error-msg">{errors.schedules}</p>}
-
-      {formData.schedules && formData.schedules.length > 0 && (
+      {errors.schedules && <p className="error-msg">{errors.schedules}</p>}
+      {formData.schedules?.length > 0 && (
         <div className="assigned-table-wrapper">
           <table className="assigned-table">
             <thead>
               <tr>
                 <th className="day-col">Day</th>
                 <th className="time-col">Time</th>
-                <th className="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {formData.schedules.map(({ id, branch, studentId, day, time }) => (
+              {formData.schedules.map(({ id, day, time }) => (
                 <tr key={id}>
                   <td className="day-col">{day}</td>
                   <td className="time-col">{time}</td>
-                  <td className="actions-col">
-                    <div className="table-actions">
-                      <button
-                        className="action-icon edit-icon"
-                        onClick={(e) => handleEdit(e, id)}
-                      >
-                        <img src={Edit} alt="Edit" />
-                      </button>
-                      <button
-                        className="action-icon delete-icon"
-                        onClick={(e) => handleDeleteClick(e, id)}
-                      >
-                        <img src={Delete} alt="Delete" />
-                      </button>
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {showDeleteModal && (
-        <div onClick={(e) => e.stopPropagation()}>
-          <ConfirmDeleteModal
-            isOpen={showDeleteModal}
-            onClose={() => {
-              setShowDeleteModal(false);
-              setDeleteId(null);
-              console.log('Delete modal closed');
-            }}
-            onDelete={confirmDelete}
-          />
         </div>
       )}
     </div>

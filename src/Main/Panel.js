@@ -9,6 +9,7 @@ import Dashboard from '../pages/Dashboard';
 import Students from '../pages/Students';
 import Course from '../pages/Course';
 import Payments from '../pages/Payments';
+import Schedule from '../pages/Schedule';
 import Exam from '../pages/Exam';
 import Report from '../pages/Report';
 import Settings from '../pages/Settings';
@@ -108,6 +109,7 @@ function Panel() {
                   <Route path="/students" element={<Students />} />
                   <Route path="/course" element={<Course />} />
                   <Route path="/payments" element={<Payments />} />
+                  <Route path='/schedule' element={<Schedule/>}/>
                   <Route path="/exam" element={<Exam />} />
                   <Route path="/report" element={<Report />} />
                   <Route path="/settings" element={<Settings />} />

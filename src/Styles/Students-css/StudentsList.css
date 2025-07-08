@@ -98,7 +98,7 @@ th, td {
   height: 120px;
   object-fit: cover;
   border-radius: 50%;
-  border: 1px solid #ffffff;
+  border: 1px solid #f0f0f0;
   margin-bottom: 12px; /* space below image */
 }
 

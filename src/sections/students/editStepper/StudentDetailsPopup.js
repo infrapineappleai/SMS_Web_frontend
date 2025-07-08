@@ -14,7 +14,6 @@ import WhatsAppIcon from '../../../assets/icons/WhatsApp.png';
 import PhoneIcon from '../../../assets/icons/Phone.png';
 import BranchIcon from '../../../assets/icons/Branch.png';
 import StudentIcon from '../../../assets/icons/Student.png';
-import CurrencyIcon from '../../../assets/icons/currency.png';
 import CloseIcon from '../../../assets/icons/Close.png';
 
 
@@ -107,8 +106,7 @@ const StudentDetailsPopup = ({ isOpen, onClose, studentData, onChange, onSave })
             <label><img src={StudentIcon} alt="Student ID" /> Student ID</label>
             <input type="text" name="studentId" value={formData.studentId || ''} onChange={handleChange} />
 
-            <label><img src={CurrencyIcon} alt="Fee" /> Admission Fee</label>
-            <input type="number" name="admissionFee" value={formData.admissionFee || ''} onChange={handleChange} />
+            
           </div>
         </section>
 

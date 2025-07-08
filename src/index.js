@@ -1,9 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { ToastProvider } from './modals/ToastProvider';
+import Modal from 'react-modal';  // import react-modal
+
+Modal.setAppElement('#root');  // <-- Add this line here ONCE globally
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
