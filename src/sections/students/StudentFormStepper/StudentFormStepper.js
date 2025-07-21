@@ -1,5 +1,4 @@
-// src/sections/students/StudentFormStepper/StudentFormStepper.js
-import React from 'react';
+
 import '../../../Styles/Students-css/StudentFormStepper/StudentFormStepper.css';
 import Rectangle from '../../../assets/icons/Rectangle.png';
 

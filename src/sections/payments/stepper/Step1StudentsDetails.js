@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../../../Styles/payment/stepper/Step1StudentsDetails.css';
 import studentAvatar from '../../../assets/images/image1.jpg';
 import FrameIcon from '../../../assets/icons/Frame.png';
-import Group from '../../../assets/icons/Group 30437.png';
 import user from '../../../assets/icons/user_2_fill.png';
 import whatsapp from '../../../assets/icons/whatsapp_fill.png';
+
+const API_BASE_URL = "http://localhost:5000"; // Base URL for API and images
 
 const Step1StudentsDetails = ({ onStudentSelect }) => {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -14,13 +15,15 @@ const Step1StudentsDetails = ({ onStudentSelect }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Fetch all students
   const fetchAllStudents = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get('https://pineappleai.cloud/api/sms/api/students');
-setStudents(Array.isArray(response.data) ? response.data : response.data.data || []); // ✅
-      console.log('Fetched students:', response.data); // Debug log
+      const response = await axios.get(`${API_BASE_URL}/api/students`);
+      const data = Array.isArray(response.data) ? response.data : response.data.data || [];
+      setStudents(data);
+      console.log('Fetched all students:', data);
     } catch (err) {
       setError('Failed to fetch students. Please try again.');
       console.error('Error fetching students:', err);
@@ -29,45 +32,71 @@ setStudents(Array.isArray(response.data) ? response.data : response.data.data ||
     }
   };
 
+  // Fetch students based on search query
   const fetchSearchStudents = async (query = '') => {
+    if (!query.trim()) {
+      fetchAllStudents();
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const params = {};
-      if (query) {
-        if (/^\d+$/.test(query)) {
-          params.student_no = parseInt(query); // Match backend field
-        } else {
-          params.name = query; // Match backend search by name
-        }
+      if (/^[a-zA-Z0-9\-_]+$/.test(query) && !/\s/.test(query) && query.toLowerCase().startsWith('st-')) {
+        params.student_no = query.trim();
+      } else {
+        params.name = query.trim();
       }
-      const response = await axios.get('https://pineappleai.cloud/api/sms/api/student/search', { params });
-      setStudents(response.data);
-      console.log('Searched students:', response.data); // Debug log
+      const response = await axios.get(`${API_BASE_URL}/api/student/search`, { params });
+      const data = Array.isArray(response.data) ? response.data : response.data.data || [];
+      if (data.length === 0 && query) {
+        setError(`No students found for "${query}".`);
+      } else {
+        setStudents(data);
+      }
     } catch (err) {
       setError('Failed to fetch students. Please try again.');
-      console.error('Error searching students:', err);
+      console.error('Error searching students:', err.message, err.response?.data);
     } finally {
       setLoading(false);
     }
   };
 
+  // Debounce search
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func(...args), delay);
+    };
+  };
+
+  const debouncedFetchSearchStudents = useCallback(debounce(fetchSearchStudents, 500), []);
+
   useEffect(() => {
     if (searchQuery.trim() === '') {
       fetchAllStudents();
     } else {
-      fetchSearchStudents(searchQuery);
+      debouncedFetchSearchStudents(searchQuery);
     }
-  }, [searchQuery]);
+  }, [searchQuery, debouncedFetchSearchStudents]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
   };
 
   const handleSelectStudent = (student) => {
-    setSelectedStudentId(student.student_no); // Use student_no instead of id
-    console.log('Selected student:', student); // Debug log
-    onStudentSelect(student);
+    setSelectedStudentId(student.student_no);
+    console.log('Selected student for payment:', student);
+    onStudentSelect(student); // Pass student data to parent for payment
+  };
+
+  // Construct full image URL
+  const getImageUrl = (photoUrl) => {
+    if (!photoUrl || photoUrl === '/default-avatar.png') {
+      return studentAvatar;
+    }
+    return photoUrl.startsWith('http') ? photoUrl : `${API_BASE_URL}${photoUrl}`;
   };
 
   return (
@@ -77,7 +106,7 @@ setStudents(Array.isArray(response.data) ? response.data : response.data.data ||
         <input
           type="text"
           className="form-input"
-          placeholder="Type Student Name or Id"
+          placeholder="Type Student Name or ID"
           value={searchQuery}
           onChange={handleSearchChange}
         />
@@ -91,15 +120,16 @@ setStudents(Array.isArray(response.data) ? response.data : response.data.data ||
         <div className="student-cards-grid">
           {students.map((student) => (
             <div
-              key={student.student_no} // Use student_no as key
+              key={student.student_no}
               className={`student-card ${selectedStudentId === student.student_no ? 'selected' : ''}`}
               onClick={() => handleSelectStudent(student)}
             >
               <div className="student-card-name-container">
                 <img
-                  src={student.photo_url || studentAvatar}
+                  src={getImageUrl(student.photo_url)}
                   alt="Student Avatar"
                   className="student-avatar"
+                  onError={(e) => (e.target.src = studentAvatar)}
                 />
                 <p className="student-card-name">{student.full_name}</p>
               </div>
@@ -109,7 +139,7 @@ setStudents(Array.isArray(response.data) ? response.data : response.data.data ||
                     <img src={user} alt="Icon" className="icon-style" />
                   </div>
                   <div className="details-container">
-                    <p><strong>Student Id</strong></p>
+                    <p><strong>Student ID</strong></p>
                     <p className="p-a">{student.student_no}</p>
                   </div>
                 </div>
@@ -132,9 +162,7 @@ setStudents(Array.isArray(response.data) ? response.data : response.data.data ||
                   </div>
                 </div>
                 <div className="student-card-info-container">
-                  <div className="icon-container">
-                    <img src={Group} alt="Icon" className="icon-style" />
-                  </div>
+                 
                   <div className="details-container">
                     <p><strong>Branch</strong></p>
                     <p className="p-a">{student.branch_name}</p>

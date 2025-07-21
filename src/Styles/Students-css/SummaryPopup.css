@@ -7,9 +7,8 @@
   background-color: #ffffff;
   border-radius: 12px;
   padding: 20px;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .modal-overlay {
@@ -65,14 +64,15 @@
 }
 
 .summary-section {
+  width: 100%;
   margin-bottom: 25px;
-}
+  padding: 0; /* prevent left/right padding from restricting width */}
 
 .summary-section h3 {
   font-size: 18px;
   color: #1f6978;
   border-bottom: 1px solid #ccc;
-  padding-bottom: 6px;
+  padding-bottom: 16px;
   margin-bottom: 15px;
 }
 
@@ -112,17 +112,26 @@
 
 .scrollable-section {
   overflow-x: auto;
+    width: 100%;
+  padding: 0; /* remove any padding if it causes inner gap */
+  margin: 0;
 }
 
 .scroll-table {
-  max-height: 180px;
+  width: 100%;
+  max-height: 180px; /* vertical scroll if needed */
   overflow-y: auto;
+  overflow-x: auto; /* horizontal scroll */
   border-radius: 8px;
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.05);
+
 }
 
 .scroll-table table {
-  width: 100%;
+min-width: 100%; /* ensures table spans full scrollable area */
+  width: 100%; /* takes full container width */
   border-collapse: collapse;
+  table-layout: fixed; /* ensures consistent cell sizing */
 }
 
 .scroll-table th,
@@ -130,11 +139,13 @@
   text-align: left;
   padding: 10px;
   border-bottom: 1px solid #ddd;
+    white-space: nowrap; /* prevent wrapping, helps scrolling */
+
 }
 
 .scroll-table th {
   background-color: #e9f1f2;
-  color: #1f6978;
+  color: #000000;
   font-size: 14px;
 }
 
@@ -178,23 +189,158 @@
   background-color: #14515e;
 }
 
-@media (max-width: 768px) {
+
+/* Mobile Responsive for SummaryPopup - iOS & Android phones */
+
+/* Smaller mobile phones (320px - 480px width) */
+@media (max-width: 480px) {
   .summary-modal {
-    width: 90%;
-    padding: 10px;
+    width: 95vw;
+    max-height: 90vh;
+    padding: 15px 12px;
+    border-radius: 8px;
+  }
+
+  .profile-pic-round {
+    width: 60px;
+    height: 60px;
+    margin-top: -30px;
+    border-width: 2px;
+  }
+
+  .summary-header h2 {
+    font-size: 18px;
+  }
+
+  .summary-section h3 {
+    font-size: 16px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .info-2col {
+    flex-direction: column;
+    gap: 12px;
   }
 
   .info-block {
     flex: 1 1 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .info-label {
+    font-size: 13px;
+  }
+
+  .info-label .icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+  }
+
+  .info-value {
+    font-size: 13px;
+  }
+
+  .scroll-table {
+    max-height: 140px;
+  }
+
+  .scroll-table th,
+  .scroll-table td {
+    padding: 8px 6px;
+    font-size: 12px;
   }
 
   .summary-buttons {
     flex-direction: column;
-    align-items: stretch;
+    gap: 8px;
   }
 
   .prev-btn,
   .save-btn {
     width: 100%;
+    font-size: 14px;
+    padding: 12px 0;
+  }
+}
+
+/* Medium phones/tablets in portrait (481px - 768px width) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .summary-modal {
+    width: 90vw;
+    max-height: 90vh;
+    padding: 18px 16px;
+    border-radius: 10px;
+  }
+
+  .profile-pic-round {
+    width: 70px;
+    height: 70px;
+    margin-top: -35px;
+    border-width: 3px;
+  }
+
+  .summary-header h2 {
+    font-size: 20px;
+  }
+
+  .summary-section h3 {
+    font-size: 17px;
+  }
+
+  .info-2col {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .info-block {
+    flex: 1 1 48%;
+    padding: 12px 14px;
+  }
+
+  .info-label {
+    font-size: 14px;
+  }
+
+  .info-label .icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .info-value {
+    font-size: 14px;
+  }
+
+  .scroll-table {
+    max-height: 160px;
+  }
+
+  .scroll-table th,
+  .scroll-table td {
+    font-size: 13px;
+  }
+
+  .summary-buttons {
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .prev-btn,
+  .save-btn {
+    font-size: 15px;
+    padding: 12px 20px;
+  }
+}
+
+/* Landscape phones */
+@media (max-height: 480px) and (orientation: landscape) {
+  .summary-modal {
+    max-height: 85vh;
+  }
+
+  .scroll-table {
+    max-height: 120px;
   }
 }

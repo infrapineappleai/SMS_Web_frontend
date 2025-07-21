@@ -1,7 +1,8 @@
+
 import React, { useEffect } from 'react';
 import '../../Styles/payment/Recipt.css';
 import logo from '../../assets/images/Aradana-logo.png';
-import { jsPDF } from 'jspdf/dist/jspdf.umd.min.js';
+import jsPDF from 'jspdf';
 
 const Receipt = ({ isOpen, onClose, receiptData }) => {
   useEffect(() => {
@@ -19,13 +20,16 @@ const Receipt = ({ isOpen, onClose, receiptData }) => {
     course_fees = {},
     total_course_fees = 0,
     admission_fee = 0,
-    total_fees = 0,
     student_no = 'N/A',
   } = receiptData;
 
-  const currentDate = new Date();
+  const total_fees = admission_fee + total_course_fees;
+
+  const currentDate = new Date(); // Updated to current date and time
   const currentMonth = currentDate.toLocaleString('en-US', { month: 'long', timeZone: 'Asia/Colombo' });
   const currentYear = currentDate.getFullYear();
+  const currentDay = currentDate.getDate();
+  const formattedDate = `${currentDay.toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentYear}`; // e.g., 19/07/2025
 
   const paymentMonth = Object.keys(course_fees)[0] || currentMonth;
   const subjects = Object.entries(course_fees[paymentMonth] || {}).map(([grade, courses]) =>
@@ -37,24 +41,94 @@ const Receipt = ({ isOpen, onClose, receiptData }) => {
   ).flat() || [];
 
   const handlePrintAsPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(12);
-    doc.text(`Receipt - ${new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' })}`, 10, 10);
-    doc.text(`Full Name: ${full_name}`, 10, 20);
-    doc.text(`Student ID: ${student_no}`, 10, 30);
-    doc.text(`Subject: ${subjects.map(s => `${s.name} Grade: ${s.grade}`).join(', ')}`, 10, 40);
-    doc.text(`Paid for: ${currentMonth} ${currentYear}`, 10, 50);
-    doc.text(`Admission Fee: Rs.${admission_fee}/=`, 10, 60);
-    doc.text(`Monthly Fee: Rs.${total_course_fees}/=`, 10, 70);
-    doc.text(`Total Amount: Rs.${total_fees}/=`, 10, 80);
-    doc.text(`Branch: ${branch_name}`, 10, 90);
-    doc.text('Note: Kindly pay your fee before 10th of every month', 10, 100);
-    doc.text('Thank You For Your Payment!', 10, 110);
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 120 + subjects.length * 6],
+    });
+
+    doc.setFillColor(230, 237, 234); // #e6edea
+    doc.rect(0, 0, 80, 25, 'F');
+
+    doc.addImage(logo, 'PNG', 5, 5, 12, 12);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(16);
+    doc.setTextColor(44, 95, 95);
+    doc.text('ARADANA', 20, 12);
+    doc.setFontSize(10);
+    doc.setTextColor(218, 165, 32);
+    doc.text('Music Academy', 20, 17);
+
+    doc.setFontSize(11);
+    doc.setTextColor(44, 95, 95);
+    doc.text('Receipt', 5, 30);
+    doc.setFontSize(8);
+    doc.text(`Date: ${formattedDate}`, 50, 30);
+
+    doc.setTextColor(51, 51, 51);
+    doc.setFontSize(9);
+    doc.text('Payment Details', 5, 37);
+    const boxStartY = 39;
+    const boxHeight = 65 + subjects.length * 6;
+    doc.setDrawColor(200, 200, 200);
+    doc.rect(5, boxStartY, 70, boxHeight, 'S');
+
+    let y = boxStartY + 8;
+    const labelX = 8;
+    const colonX = 32;
+    const valueX = 35;
+
+    const addRow = (label, value) => {
+      doc.setTextColor(85, 85, 85);
+      doc.text(`${label}`, labelX, y);
+      doc.text(':', colonX, y);
+      doc.setTextColor(51, 51, 51);
+      doc.text(`${value}`, valueX, y);
+      y += 6;
+    };
+
+    addRow('Full Name', full_name);
+    addRow('Student ID', student_no);
+
+    if (subjects.length > 0) {
+      subjects.forEach((sub) => {
+        addRow('Subject', `${sub.name} Grade: ${sub.grade}`);
+      });
+    } else {
+      addRow('Subject', 'N/A');
+    }
+
+    addRow('Paid for', `${currentMonth} ${currentYear}`);
+    addRow('Admission Fee', `Rs.${admission_fee}/=`);
+    addRow('Monthly Fee', `Rs.${total_course_fees}/=`);
+
+    doc.line(labelX, y - 2, 70, y - 2);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('Total Amount', labelX, y + 4);
+    doc.text(':', colonX, y + 4);
+    doc.text(`Rs.${total_fees}/=`, valueX, y + 4);
+    y += 10;
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 51, 51);
+    doc.text(branch_name, labelX, y);
+    y += 8;
+
+    doc.setFontSize(7);
+    doc.setTextColor(217, 83, 79);
+    doc.text('Note: Kindly pay your fee before 10th of every month', 40, y, { align: 'center' });
+    y += 6;
+    doc.setFontSize(9);
+    doc.setTextColor(44, 95, 95);
+    doc.text('Thank You For Your Payment!', 40, y, { align: 'center' });
+
     doc.save('receipt.pdf');
   };
 
   const handleSkip = () => {
-    onClose(); // Simply close the modal
+    onClose();
   };
 
   const logoSrc = `${logo}?t=${Date.now()}`;
@@ -80,7 +154,7 @@ const Receipt = ({ isOpen, onClose, receiptData }) => {
         <div className="receipt-content-body">
           <div className="receipt-info">
             <h2 className="receipt-title">Receipt</h2>
-            <p className="receipt-date">Date: {new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Colombo' })}</p>
+            <p className="receipt-date">Date: {formattedDate}</p>
           </div>
 
           <div className="payment-details">
@@ -100,8 +174,8 @@ const Receipt = ({ isOpen, onClose, receiptData }) => {
           <div className="receipt-footer">
             <p className="receipt-note">Note: Kindly pay your fee before 10th of every month</p>
             <p className="thank-you">Thank You For Your Payment!</p>
-            <button className="btn-pdf" onClick={handlePrintAsPDF}>Print as PDF</button>
             <button className="btn-skip" onClick={handleSkip}>Skip</button>
+            <button className="btn-pdf" onClick={handlePrintAsPDF}>Print as PDF</button>
           </div>
         </div>
       </div>

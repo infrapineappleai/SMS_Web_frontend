@@ -169,3 +169,73 @@
 
 
 
+
+
+
+/* Mobile Responsive for AddStudentForm (iOS/Android) */
+
+@media (max-width: 480px) {
+  /* Modal overlay covers most of screen on mobile */
+  .student-modal-overlay-stepper {
+    top: 10px !important;
+    left: 5px !important;
+    max-width: calc(100vw - 10px) !important;
+    max-height: calc(100vh - 20px) !important;
+    overflow: auto !important;
+  }
+
+  /* Modal container full width and height for mobile */
+  .student-modal {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    padding: 15px !important;
+  }
+
+  /* Modal header */
+  .modal-header {
+    padding: 10px 0 !important;
+  }
+
+  /* Close icon smaller and repositioned */
+  .close-icon {
+    width: 20px !important;
+    height: 20px !important;
+    margin-top: 0 !important;
+  }
+
+  /* Buttons full width stacked vertically */
+  .modal-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-previous, .btn-next {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 44px !important;
+    font-size: 15px !important;
+  }
+
+  /* Scrollable content padding reduced */
+  .modal-content-wrapper {
+    padding-right: 5px !important;
+  }
+
+  /* Adjust form-group inputs and textarea font size */
+  .form-group input,
+  .form-group textarea {
+    font-size: 16px !important;
+    padding: 12px !important;
+  }
+
+  /* Table responsiveness */
+  .scroll-table table {
+    font-size: 14px !important;
+  }
+
+  /* Fix overflow on scrollable sections */
+  .scrollable-section {
+    overflow-x: auto !important;
+  }
+}

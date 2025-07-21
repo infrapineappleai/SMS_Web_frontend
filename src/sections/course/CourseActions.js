@@ -1,8 +1,7 @@
-// src/components/course/CourseActions.js
 import React from 'react';
 import eyeIcon from '../../assets/icons/Eye.png';
 import pencilIcon from '../../assets/icons/pencil_line.png';
-import deleteIcon from '../../assets/icons/Delete.png';
+import deleteIcon from '../../assets/icons/delete2.png';
 import '../../Styles/Course-css.css/CourseActions.css';
 
 const CourseActions = ({
@@ -15,21 +14,47 @@ const CourseActions = ({
 }) => {
   const handleIconClick = (action) => {
     if (action === 'View') {
-      setSelectedCourse(course);
-      if (setEditCourse) setEditCourse(null);
+      if (!isDetailView) {
+        setSelectedCourse(course);
+        if (setEditCourse) setEditCourse(null);
+      }
     } else if (action === 'Edit') {
-      setEditCourse(course); 
-    } else if (action === 'Delete') {
+      if (!course || !course.uniqueId) {
+        console.error("Invalid course data for edit:", course);
+        return;
+      }
+      // For detail view, pass the grade details including id
       if (isDetailView) {
-        // FIX: Use gradeFeeId instead of uniqueId
-        setShowDeleteConfirm({ 
-          courseId: course.courseUniqueId, 
-          detailId: course.gradeFeeId
+        setEditCourse({
+          ...course,
+          gradeId: course.id, // Ensure gradeId is passed
+          courseUniqueId: course.courseUniqueId,
+          gradeFeeId: course.gradeFeeId,
+          branchId: course.branchId || '1'
         });
       } else {
-        setShowDeleteConfirm(course.uniqueId);
+        setEditCourse(course);
       }
-      if (setSelectedCourse) setSelectedCourse(null); 
+    } else if (action === 'Delete') {
+      if (isDetailView) {
+        if (!course.gradeFeeId) {
+          console.error('Missing gradeFeeId in course detail:', course);
+          return;
+        }
+        setShowDeleteConfirm({
+          courseId: course.courseUniqueId,
+          detailId: course.gradeFeeId,
+        });
+      } else {
+        if (!course.id) {
+          console.error('Missing course id:', course);
+          return;
+        }
+        setShowDeleteConfirm(course.id);
+      }
+      if (!isDetailView && setSelectedCourse) {
+        setSelectedCourse(null);
+      }
       if (setEditCourse) setEditCourse(null);
     }
   };

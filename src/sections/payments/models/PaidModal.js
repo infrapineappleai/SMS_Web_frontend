@@ -37,8 +37,11 @@ const PaidModal = ({ isOpen, onClose, studentData }) => {
 
   if (!isOpen || !studentData) return null;
 
+  // Filter payments to include only those with "Paid" status
+  const paidPayments = studentData.payments.filter(payment => payment.status === 'Paid');
+
   const calculateTotal = () => {
-    return studentData.payments.reduce((total, payment) => total + payment.amount, 0);
+    return paidPayments.reduce((total, payment) => total + payment.amount, 0);
   };
 
   return (
@@ -46,7 +49,7 @@ const PaidModal = ({ isOpen, onClose, studentData }) => {
       <div className="modal">
         <div className="modal-header">
           <h2 className="modal-title">Payment Details</h2>
-          <button className="close-btn" onClick={onClose}>
+          <button className="close-btn" onClose={onClose}>
             <svg className="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -96,18 +99,26 @@ const PaidModal = ({ isOpen, onClose, studentData }) => {
             <div className="payment-table-scroll">
               <table className="payment-table-body">
                 <tbody>
-                  {studentData.payments.map((payment, index) => (
-                    <tr key={index}>
-                      <td>{payment.date}</td>
-                      <td>{payment.branch}</td>
-                      <td>{payment.amount.toLocaleString()}</td>
-                      <td>
-                        <span className={`status-badge ${payment.status === 'Paid' ? 'status-paid' : 'status-pending'}`}>
-                          {payment.status}
-                        </span>
+                  {paidPayments.length > 0 ? (
+                    paidPayments.map((payment, index) => (
+                      <tr key={index}>
+                        <td>{payment.date}</td>
+                        <td>{payment.branch}</td>
+                        <td>{payment.amount.toLocaleString()}</td>
+                        <td>
+                          <span className={`status-badge ${payment.status === 'Paid' ? 'status-paid' : 'status-pending'}`}>
+                            {payment.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>
+                        No paid payments found
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>

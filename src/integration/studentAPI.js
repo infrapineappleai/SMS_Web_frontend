@@ -1,476 +1,334 @@
-import axios from "axios";
+import axios from 'axios';
 
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
-const RETRIES = 2;
-const DELAY = 1000;
+const API_URL = 'http://localhost:5000/api';
 
-// Helper function for retry logic
-const withRetry = async (fn, retries = RETRIES, delay = DELAY) => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      console.error(`Attempt ${attempt} failed:`, {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      });
-      if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      } else {
-        throw error;
-      }
+export const getDropdownOptions = async (type, params = {}) => {
+  try {
+    let url;
+    switch (type) {
+      case 'courses':
+        url = `${API_URL}/courses`;
+        break;
+      case 'grades':
+        if (!params.courseId) throw new Error('Course ID is required');
+        url = `${API_URL}/courses/course/${params.courseId}/grades`;
+        break;
+      case 'branches':
+        url = `${API_URL}/branches`;
+        break;
+      case 'slots':
+        if (!params.branchId || !params.courseId || !params.gradeId) {
+          throw new Error('branchId, courseId, and gradeId are all required for slot fetching');
+        }
+        url = `${API_URL}/slots/available?branchId=${params.branchId}&courseId=${params.courseId}&gradeId=${params.gradeId}`;
+        break;
+      default:
+        throw new Error(`Invalid dropdown type: ${type}`);
     }
+
+    const response = await axios.get(url);
+    let data = response.data;
+
+    if (type === 'slots') {
+      data = data.map(slot => ({
+        id: slot.id,
+        branch_id: slot.branch_id,
+        day: slot.day,
+        time: `${slot.start_time || slot.st_time}-${slot.end_time}`,
+      }));
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Error fetching ${type}:`, error.message);
+    throw new Error(error.response?.data?.error || `Failed to fetch ${type}`);
   }
 };
 
-const mapStudentData = (student) => ({
-  id: student.id || null,
-  salutation: student.salutation || "",
-  first_name: student.first_name || "",
-  last_name: student.last_name || "",
-  name:
-    [student.salutation, student.first_name, student.last_name]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || "Unknown Student",
-  email: student.email || "",
-  phn_num: String(student.phn_num || ""),
-  ice_contact: String(student.ice_contact || ""),
-  address: student.address || "",
-  gender: student.gender || "",
-  date_of_birth: student.date_of_birth || "",
-  student_no: String(student.student_no || ""),
-  photo_url:
-    typeof student.photo_url === "string" &&
-    (student.photo_url.startsWith("http") ||
-      student.photo_url.startsWith("/Uploads") ||
-      student.photo_url.startsWith("data:image"))
-      ? student.photo_url
-
-
-
-      : "/default-avatar.png",  // <--- Use default avatar here
-
-
-      
-  status: student.status
-    ? student.status.charAt(0).toUpperCase() +
-      student.status.slice(1).toLowerCase()
-    : "Active",
-  course: student.course || "",
-  grade: student.grade || "",
-  branch: student.branch || "",
-  schedule_day: student.schedule_day || "",
-  schedule_time: student.schedule_time || "",
-});
-
-
-export const getDropdownOptions = async () => {
-  return withRetry(async () => {
-    console.log(
-      `Fetching dropdown options: ${API_BASE_URL}/students/dropdown-options`
-    );
-    const response = await axios.get(
-      `${API_BASE_URL}/students/dropdown-options`
-    );
-    console.log("Dropdown options response:", response.data);
-
-    if (!response.data?.success || !response.data?.data) {
-      throw new Error("Invalid response structure");
-    }
-
-    const { courses, grades, branches, slots, statuses } = response.data.data;
-    return {
-      courses: Array.isArray(courses) ? courses : [],
-      grades: Array.isArray(grades) ? grades : [],
-      branches: Array.isArray(branches) ? branches : [],
-      slots: Array.isArray(slots) ? slots : [],
-      statuses: Array.isArray(statuses) ? statuses : [],
-    };
-  }).catch((error) => {
-    console.error("Error fetching dropdown options:", {
+export const getStudentSlots = async (studentId) => {
+  try {
+    const response = await axios.get(`${API_URL}/students/${studentId}/slots`);
+    console.log(`Slots response for student ${studentId}:`, JSON.stringify(response.data, null, 2));
+    return response.data.map(slot => {
+      const day = slot.day || 'N/A';
+      const startTime = slot.st_time || '';
+      const endTime = slot.end_time || '';
+      const time = startTime && endTime ? `${startTime}-${endTime}` : 'N/A';
+      return {
+        id: slot.id || Date.now(),
+        day,
+        time,
+        branch_id: slot.branch_id || null,
+        course_id: slot.course_id || null,
+        grade_id: slot.grade_id || null,
+      };
+    });
+  } catch (error) {
+    console.error(`Error fetching student slots for ${studentId}:`, {
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
     });
-    return { courses: [], grades: [], branches: [], slots: [], statuses: [] };
-  });
+    return [];
+  }
+};
+
+export const getStudentBranches = async (studentId) => {
+  try {
+    const response = await axios.get(`${API_URL}/students/${studentId}/branches`);
+    console.log(`Branches response for student ${studentId}:`, JSON.stringify(response.data, null, 2));
+    return response.data.map(branch => ({
+      id: branch.id || null,
+      branch_name: branch.branch_name || 'N/A',
+    }));
+  } catch (error) {
+    console.error(`Error fetching student branches for ${studentId}:`, {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
+    return [];
+  }
+};
+
+export const createStudent = async (data) => {
+  try {
+    const studentDetails = JSON.parse(data.get('student_details') || '{}');
+    if (!studentDetails.student_no) {
+      throw new Error('student_no is required in student_details');
+    }
+
+    console.log('Sending student creation payload:', data);
+
+    const response = await axios.post(`${API_URL}/students/finalize`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    console.log('Student creation response:', JSON.stringify(response.data, null, 2));
+
+    const studentId = response.data.user_id || response.data.id || response.data.student?.id || response.data.student_id;
+    if (!studentId) {
+      throw new Error('Student ID not found in response');
+    }
+
+    const [grades, slots, branches] = await Promise.all([
+      axios.get(`${API_URL}/courses/student/${studentId}/grades`),
+      getStudentSlots(studentId),
+      getStudentBranches(studentId),
+    ]);
+
+    const courses = await axios.get(`${API_URL}/courses`);
+    const courseMap = new Map(courses.data.map(c => [c.id, c.name]));
+
+    const assignedCourses = grades.data.map(grade => ({
+      course: courseMap.get(grade.Grade?.Course?.id) || 'N/A',
+      grade: grade.Grade?.grade_name || 'N/A',
+    }));
+
+    const userDetails = JSON.parse(data.get('user') || '{}');
+
+    return {
+      ...response.data,
+      user_id: studentId,
+      ...userDetails,
+      ...studentDetails,
+      photo_url: response.data.photo_url || '/default-avatar.png',
+      assignedCourses,
+      schedules: slots,
+      branch: branches.length > 0 ? branches[0].branch_name : 'N/A',
+    };
+  } catch (error) {
+    console.error('Error creating student:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.error || 'Failed to create student');
+  }
+};
+
+export const createStudentWithOptionalPhoto = async (data) => {
+  try {
+    const createRes = await createStudent(data);
+    console.log('createStudent result:', createRes);
+
+    if (!createRes.user_id) {
+      console.error('No user_id found in createStudent response');
+      throw new Error('Failed to retrieve student ID');
+    }
+
+    return createRes;
+  } catch (error) {
+    console.error('Error in createStudentWithOptionalPhoto:', error);
+    throw error;
+  }
+};
+
+export const uploadStudentPhoto = async (userId, photoFile) => {
+  try {
+    if (!userId) {
+      throw new Error('userId is undefined');
+    }
+    console.log('Uploading photo for userId:', userId);
+    const formData = new FormData();
+    formData.append('photo', photoFile);
+
+    const response = await axios.post(`${API_URL}/students/${userId}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    console.log('Photo uploaded successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading photo:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.error || 'Failed to upload photo');
+  }
+};
+
+export const updateStudent = async (userId, data) => {
+  try {
+    const response = await axios.patch(`${API_URL}/students/${userId}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    const [grades, slots, branches] = await Promise.all([
+      axios.get(`${API_URL}/courses/student/${userId}/grades`),
+      getStudentSlots(userId),
+      getStudentBranches(userId),
+    ]);
+
+    const courses = await axios.get(`${API_URL}/courses`);
+    const courseMap = new Map(courses.data.map(c => [c.id, c.name]));
+
+    const assignedCourses = grades.data.map(grade => ({
+      course: courseMap.get(grade.Grade?.Course?.id) || 'N/A',
+      grade: grade.Grade?.grade_name || 'N/A',
+    }));
+
+    const studentDetails = JSON.parse(data.get('student_details') || '{}');
+    const userDetails = JSON.parse(data.get('user') || '{}');
+
+    const result = {
+      ...userDetails,
+      ...studentDetails,
+      user_id: userId,
+      photo_url: response.data.photo_url || studentDetails.photo_url || '/default-avatar.png',
+      assignedCourses,
+      schedules: slots,
+      branch: branches.length > 0 ? branches[0].branch_name : 'N/A',
+    };
+    console.log('Updated student data:', result);
+    return result;
+  } catch (error) {
+    console.error('Error updating student:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.error || 'Failed to update student');
+  }
 };
 
 export const getAllStudents = async () => {
-  return withRetry(async () => {
-    console.log(`Fetching students: ${API_BASE_URL}/students`);
-    const response = await axios.get(`${API_BASE_URL}/students`);
-    console.log("Students response:", JSON.stringify(response.data, null, 2));
-
-    const { data } = response.data;
-    if (!Array.isArray(data)) {
-      console.error("Expected array in response.data.data, got:", data);
-      return [];
-    }
-    return data.map(mapStudentData);
-  }).catch((error) => {
-    console.error("Error fetching students:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    return [];
-  });
-};
-
-export const searchStudents = async (query) => {
-  return withRetry(async () => {
-    console.log(
-      `Searching students: ${API_BASE_URL}/students/search?query=${encodeURIComponent(
-        query
-      )}`
-    );
-    const response = await axios.get(`${API_BASE_URL}/students/search`, {
-      params: { query },
-    });
-    console.log(
-      "Search students response:",
-      JSON.stringify(response.data, null, 2)
-    );
-
-    const { data } = response.data;
-    if (!Array.isArray(data)) {
-      console.error("Expected array in response.data.data, got:", data);
-      return [];
-    }
-    return data.map(mapStudentData);
-  }).catch((error) => {
-    console.error("Error searching students:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    return [];
-  });
-};
-
-
-
-
-
-export const createStudent = async (studentData) => {
   try {
-    const requiredFields = [
-      "first_name",
-      "last_name",
-      "email",
-      "phn_num",
-      "course",
-      "grade",
-      "branch",
-      "student_no",
-      "schedule_day",
-      "schedule_time",
-    ];
+    const response = await axios.get(`${API_URL}/users?role=student`);
+    const courses = await axios.get(`${API_URL}/courses`);
+    const courseMap = new Map(courses.data.map(c => [c.id, c.name]));
 
-    const missingFields = requiredFields.filter((field) => !studentData[field]);
-    if (missingFields.length > 0) {
-      throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
-    }
+    const students = await Promise.all(
+      response.data.map(async (student) => {
+        try {
+          const [profile, grades, slots, branches] = await Promise.all([
+            axios.get(`${API_URL}/students/${student.id}/profile`),
+            axios.get(`${API_URL}/courses/student/${student.id}/grades`),
+            getStudentSlots(student.id),
+            getStudentBranches(student.id),
+          ]);
 
-    const formData = new FormData();
-    formData.append("first_name", studentData.first_name.trim());
-    formData.append("last_name", studentData.last_name.trim());
-    formData.append("email", studentData.email.trim());
-    formData.append("phn_num", studentData.phn_num.toString().trim());
-    formData.append("course", studentData.course);
-    formData.append("grade", studentData.grade);
-    formData.append("branch", studentData.branch);
-    formData.append("student_no", studentData.student_no.toString().trim());
-    formData.append("schedule_day", studentData.schedule_day);
-    formData.append("schedule_time", studentData.schedule_time);
-    formData.append("status", studentData.status?.toLowerCase() || "active");
+          console.log(`Branches for student ${student.id}:`, branches);
+          console.log(`Slots for student ${student.id}:`, slots);
 
-    if (studentData.salutation)
-      formData.append("salutation", studentData.salutation);
-    if (studentData.gender) {
-      const genderFormatted =
-        studentData.gender.charAt(0).toUpperCase() +
-        studentData.gender.slice(1).toLowerCase();
-      formData.append("gender", genderFormatted);
-    }
-    if (studentData.date_of_birth)
-      formData.append("date_of_birth", studentData.date_of_birth);
-    if (studentData.address) formData.append("address", studentData.address);
-    if (studentData.ice_contact)
-      formData.append("ice_contact", studentData.ice_contact.toString().trim());
-    if (studentData.photoFile) {
-      formData.append("photo", studentData.photoFile);
-    } else if (studentData.photo_url) {
-      formData.append("photo_url", studentData.photo_url);
-    }
+          const courseNames = grades.data
+            .map(grade => courseMap.get(grade.Grade?.Course?.id))
+            .filter(Boolean);
 
-    console.log("Submitting student data:", studentData);
+          const studentData = {
+            ...student,
+            student_no: profile.data.StudentDetail?.student_no || 'N/A',
+            photo_url: profile.data.StudentDetail?.photo_url || null,
+            salutation: profile.data.StudentDetail?.salutation || '',
+            ice_contact: profile.data.StudentDetail?.ice_contact || 'N/A',
+            student_details: {
+              student_no: profile.data.StudentDetail?.student_no || 'N/A',
+              photo_url: profile.data.StudentDetail?.photo_url || null,
+              salutation: profile.data.StudentDetail?.salutation || '',
+              ice_contact: profile.data.StudentDetail?.ice_contact || 'N/A',
+            },
+            course: courseNames.length > 0 ? courseNames.join(", ") : "N/A",
+            assignedCourses: grades.data.map(grade => ({
+              course: courseMap.get(grade.Grade?.Course?.id) || "N/A",
+              grade: grade.Grade?.grade_name || "N/A",
+            })),
+            schedules: slots,
+            branch: branches.length > 0 ? branches[0].branch_name : "N/A",
+          };
+          console.log(`Student ${student.id} data:`, studentData);
+          return studentData;
+        } catch (error) {
+          console.error(`Failed to fetch profile or grades for student ${student.id}:`, error);
+          return {
+            ...student,
+            course: "N/A",
+            assignedCourses: [],
+            schedules: [],
+            branch: "N/A",
+          };
+        }
+      })
+    );
 
-    const response = await axios.post(`${API_BASE_URL}/students`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    if (!response.data?.success || !response.data?.data) {
-      // Server didn't return expected format
-      console.error("Unexpected API response:", response.data);
-      return {
-        success: false,
-        error: response.data?.error || "Unexpected server response",
-      };
-    }
-
-    return {
-      success: true,
-      student: {
-        id: response.data.data.user_id,
-        ...mapStudentData(studentData),
-        photo_url: studentData.photoFile
-          ? `/Uploads/${studentData.photoFile.name}`
-          : studentData.photo_url || "/default-avatar.png",
-      },
-    };
+    return students;
   } catch (error) {
-    console.error("Error creating student:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-
-    let errorMessage = "Failed to create student";
-
-    if (error.response?.data?.error) {
-      errorMessage = error.response.data.error;
-      if (error.response.data.details) {
-        errorMessage += `: ${
-          Array.isArray(error.response.data.details)
-            ? error.response.data.details.join(", ")
-            : error.response.data.details
-        }`;
-      }
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
+    console.error('Error fetching students:', error);
+    throw new Error(error.response?.data?.error || 'Failed to fetch students');
   }
 };
 
-
-
-
-
-
-
-
-export const updateStudent = async (id, studentData) => {
-  return withRetry(async () => {
-    const formData = new FormData();
-    const fields = [
-      "salutation",
-      "first_name",
-      "last_name",
-      "email",
-      "phn_num",
-      "ice_contact",
-      "address",
-      "gender",
-      "date_of_birth",
-      "student_no",
-      "status",
-      "course",
-      "grade",
-      "branch",
-      "schedule_day",
-      "schedule_time",
-    ];
-
-    fields.forEach((field) => {
-      if (studentData[field] !== undefined) {
-        formData.append(
-          field,
-          typeof studentData[field] === "string"
-            ? studentData[field].trim()
-            : studentData[field]
-        );
-      }
-    });
-
-    if (studentData.photoFile) {
-      formData.append("photo", studentData.photoFile);
-    } else if (studentData.photo_url) {
-      formData.append("photo_url", studentData.photo_url);
-    }
-
-    console.log(
-      `Updating student: ${API_BASE_URL}/students/${id}`,
-      studentData
-    );
-    const response = await axios.put(
-      `${API_BASE_URL}/students/${id}`,
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      }
-    );
-
-    return {
-      success: true,
-      student: {
-        id,
-        ...mapStudentData(studentData),
-        ...response.data.data,
-        photo_url: studentData.photoFile
-          ? `/Uploads/${studentData.photoFile.name}`
-          : studentData.photo_url ||
-            response.data.data.photo_url ||
-            "/default-avatar.png",
-      },
-    };
-  }).catch((error) => {
-    console.error("Error updating student:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    throw new Error(
-      error.response?.data?.error || error.message || "Failed to update student"
-    );
-  });
-};
-
-export const deleteStudent = async (id) => {
-  return withRetry(async () => {
-    console.log(`Deleting student: ${API_BASE_URL}/students/${id}`);
-    const response = await axios.delete(`${API_BASE_URL}/students/${id}`);
-    console.log(
-      "Delete student response:",
-      JSON.stringify(response.data, null, 2)
-    );
+export const deleteStudent = async (userId) => {
+  try {
+    const response = await axios.delete(`${API_URL}/students/${userId}`);
     return response.data;
-  }).catch((error) => {
-    console.error("Error deleting student:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    throw new Error(
-      error.response?.data?.error || error.message || "Failed to delete student"
-    );
-  });
+  } catch (error) {
+    console.error('Error deleting student:', error.message);
+    throw new Error(error.response?.data?.error || 'Failed to delete student');
+  }
 };
 
-export const filterStudents = async (status) => {
-  return withRetry(async () => {
-    console.log(
-      `Filtering students by status: ${API_BASE_URL}/students/filter/status?status=${encodeURIComponent(
-        status
-      )}`
+export const searchStudents = async (query) => {
+  try {
+    const students = await getAllStudents();
+    if (!query) return students;
+    return students.filter(
+      (student) =>
+        student.name?.toLowerCase().includes(query.toLowerCase()) ||
+        student.email?.toLowerCase().includes(query.toLowerCase())
     );
-    const response = await axios.get(`${API_BASE_URL}/students/filter/status`, {
-      params: { status },
-    });
-    console.log(
-      "Filter students response:",
-      JSON.stringify(response.data, null, 2)
-    );
-
-    const { data } = response.data;
-    if (!Array.isArray(data)) {
-      console.error("Expected array in response.data.data, got:", data);
-      return [];
-    }
-    return data.map(mapStudentData);
-  }).catch((error) => {
-    console.error("Error filtering students by status:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    return [];
-  });
+  } catch (error) {
+    console.error('Error searching students:', error.message);
+    throw new Error(error.message || 'Failed to search students');
+  }
 };
 
-export const filterStudentsByCourse = async (course) => {
-  return withRetry(async () => {
-    console.log(
-      `Filtering students by course: ${API_BASE_URL}/students/filter/course?course=${encodeURIComponent(
-        course
-      )}`
-    );
-    const response = await axios.get(`${API_BASE_URL}/students/filter/course`, {
-      params: { course },
+export const filterStudents = async (filters) => {
+  try {
+    const students = await getAllStudents();
+    return students.filter((student) => {
+      const matchesStatus = filters.status ? student.status === filters.status : true;
+      return matchesStatus;
     });
-    console.log(
-      "Filter by course response:",
-      JSON.stringify(response.data, null, 2)
-    );
-
-    const { data } = response.data;
-    if (!Array.isArray(data)) {
-      console.error("Expected array in response.data.data, got:", data);
-      return [];
-    }
-    return data.map(mapStudentData);
-  }).catch((error) => {
-    console.error("Error filtering students by course:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    return [];
-  });
+  } catch (error) {
+    console.error('Error filtering students:', error.message);
+    throw new Error(error.message || 'Failed to filter students');
+  }
 };
 
-export const filterStudentsByPayment = async (hasPayment) => {
-  return withRetry(async () => {
-    console.log(
-      `Filtering students by payment: ${API_BASE_URL}/students/filter/payment?hasPayment=${hasPayment}`
-    );
-    const response = await axios.get(
-      `${API_BASE_URL}/students/filter/payment`,
-      { params: { hasPayment } }
-    );
-    console.log(
-      "Filter by payment response:",
-      JSON.stringify(response.data, null, 2)
-    );
-
-    const { data } = response.data;
-    if (!Array.isArray(data)) {
-      console.error("Expected array in response.data.data, got:", data);
-      return [];
-    }
-    return data.map(mapStudentData);
-  }).catch((error) => {
-    console.error("Error filtering students by payment:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    return [];
-  });
-};
-
-export const addSlot = async (slotData) => {
-  return withRetry(async () => {
-    console.log(`Adding slot: ${API_BASE_URL}/slots`, slotData);
-    const response = await axios.post(`${API_BASE_URL}/slots`, slotData);
-    console.log("Add slot response:", JSON.stringify(response.data, null, 2));
-    return response.data;
-  }).catch((error) => {
-    console.error("Error adding slot:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-    });
-    throw new Error(
-      error.response?.data?.error || error.message || "Failed to add slot"
-    );
-  });
+export const filterStudentsByCourse = async (courseId) => {
+  try {
+    const students = await getAllStudents();
+    return students;
+  } catch (error) {
+    console.error('Error filtering students by course:', error.message);
+    throw new Error(error.message || 'Failed to filter students by course');
+  }
 };

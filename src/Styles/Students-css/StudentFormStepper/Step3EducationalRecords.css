@@ -154,19 +154,21 @@
 /* Column Alignments */
 .assigned-table th.course-col,
 .assigned-table td.course-col {
-  width: 358px;
+  width: 40%;
   text-align: left;
   padding-left: 20px;
 }
 
 .assigned-table th.grade-col,
 .assigned-table td.grade-col {
+ width: 20%;
   text-align: center;
-}
+  padding-left: 10px;
+  padding-right: 10px;}
 
 .assigned-table th.actions-col,
 .assigned-table td.actions-col {
-  width: 309px;
+  width: 40%;
   text-align: right;
   padding-right: 20px;
 }
@@ -262,34 +264,192 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* Responsive */
-@media (max-width: 600px) {
+
+
+
+
+
+.icon-btn {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.icon-btn:hover {
+  transform: scale(1.2);
+}
+
+.action-icons {
+  display: flex;
+  align-items: center;
+}
+
+
+
+
+
+
+
+
+
+
+/* 
+@media (max-width: 768px) {
+  .step-three-fields {
+    padding: 8px;
+  }
+
   .form-row {
     flex-direction: column;
-    gap: 15px;
+    gap: 20px;
   }
 
   .form-group {
     width: 100%;
   }
 
+  .input-box.with-icon {
+    padding-right: 35px;
+    font-size: 14px;
+  }
+
+  .input-icon.dropdown-icon {
+    right: 8px;
+    width: 12px;
+    height: 7px;
+  }
+
   .assign-btn {
+    width: 100%;
+    font-size: 14px;
+    height: 42px;
+    line-height: 42px;
     max-width: 100%;
-    font-size: 18px;
-    padding: 14px 0;
+  }
+
+  .assigned-table-wrapper {
+    max-height: 250px;
+    overflow-x: auto;
+    padding: 0 5px;
+  }
+
+  .assigned-table th, .assigned-table td {
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .assigned-table th.course-col,
+  .assigned-table td.course-col,
+  .assigned-table th.grade-col,
+  .assigned-table td.grade-col,
+  .assigned-table th.actions-col,
+  .assigned-table td.actions-col {
+    padding-left: 1px;
+    padding-right: 10px;
+    text-align: left;
+  }
+
+  .table-actions {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+  }
+
+  .toast {
+    top: 10px;
+    right: 10px;
+    min-width: 200px;
+    padding: 10px 12px;
+  }
+
+  .toast-icon img {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+  }
+
+  .toast-title {
+    font-size: 14px;
+  }
+
+  .toast-message {
+    font-size: 13px;
+  }
+} */
+
+
+
+
+@media (max-width: 768px) {
+  /* Proper mobile layout with clear separation of columns */
+
+  .assigned-table-wrapper {
+    padding: 0 5px;
+    overflow-x: auto;
+    max-height: none;
   }
 
   .assigned-table {
-    font-size: 16px;
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 12px;
   }
 
   .assigned-table th,
   .assigned-table td {
-    padding: 12px 10px;
+    padding: 12px 8px;
+    font-size: 13px;
+    white-space: nowrap;
+    vertical-align: middle;
   }
 
-  .action-icon {
-    font-size: 22px;
-    padding: 10px;
+  .assigned-table th.course-col,
+  .assigned-table td.course-col {
+    width: 40%;
+    text-align: left;
+    padding-left: 10px;
+  }
+
+  .assigned-table th.grade-col,
+  .assigned-table td.grade-col {
+    width: 20%;
+    text-align: center;
+  }
+
+  .assigned-table th.actions-col,
+  .assigned-table td.actions-col {
+    width: 40%;
+    text-align: right;
+    padding-right: 10px;
+  }
+
+  .table-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .icon-btn {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
+  .assign-btn {
+    width: 90%;
+    margin: 15px auto 10px auto;
+    height: 42px;
+    font-size: 14px;
+    line-height: 42px;
+    display: block;
   }
 }

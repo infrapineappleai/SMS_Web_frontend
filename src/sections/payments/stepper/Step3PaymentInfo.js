@@ -4,6 +4,7 @@ import '../../../Styles/payment/stepper/Step3PaymentInfo.css';
 import user from '../../../assets/icons/user-solid.svg';
 import user_address from '../../../assets/icons/address-card-solid.svg';
 import location from '../../../assets/icons/location-dot-solid.svg';
+const API_BASE_URL = "http://localhost:5000/api";
 
 const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
   const [loading, setLoading] = useState(true);
@@ -15,16 +16,16 @@ const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
     const fetchFees = async () => {
       setLoading(true);
       setError(null);
-      if (selectedStudent && selectedStudent.student_no) {
+      if (selectedStudent && selectedStudent.student_details_id) { // Use student_details_id
         try {
-          const response = await axios.get(`https://pineappleai.cloud/api/sms/api/payment/${selectedStudent.student_no}`, {
+          const response = await axios.get(API_BASE_URL + `/payment/${selectedStudent.student_details_id}`, {
             headers: { 'Content-Type': 'application/json' },
           });
           console.log('Fees data in Step3:', response.data);
           setFeesData(response.data);
 
           // Set initial selected month to the next unpaid month
-          const currentDate = new Date(); // July 02, 2025, 06:23 PM +0530
+          const currentDate = new Date(); // July 18, 2025, 09:41 PM +0530
           const currentMonth = currentDate.toLocaleString('en-US', { month: 'short' }); // 'Jul'
           const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           const paidMonths = (response.data.payments || []).map(p => p.split(' ')[0]); // Extract month from "MMM yyyy"
@@ -34,7 +35,7 @@ const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
           setSelectedMonth(dueMonth);
 
           // Prepare data for receipt with filtered course_fees
-          const filteredCourseFees = { [dueMonth]: response.data.course_fees[dueMonth] || {} };
+          const filteredCourseFees = { [dueMonth]: response.data.course_fees?.[dueMonth] || {} };
           let totalCourseFees = 0;
           Object.values(filteredCourseFees[dueMonth]).forEach(grade =>
             Object.values(grade).forEach(fee => {
@@ -55,14 +56,15 @@ const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
             });
           }
         } catch (err) {
-          setError('Failed to fetch fees. Please try again.');
-          console.error('Error fetching fees:', err.response?.data || err.message);
+          setError(`Failed to fetch fees for student_details_id: ${selectedStudent.student_details_id}. ${err.response?.data?.message || err.message}`);
+          console.error('Error fetching fees:', err);
+          setFeesData(null); // Reset feesData on error
         } finally {
           setLoading(false);
         }
       } else {
         setLoading(false);
-        setError('No student selected or invalid student ID.');
+        setError('No student selected or invalid student_details_id.');
       }
     };
     fetchFees();
@@ -78,7 +80,7 @@ const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
     );
   }
 
-  const { course_fees, total_course_fees, admission_fee, total_fees } = feesData || selectedStudent;
+  const { course_fees, total_course_fees, admission_fee, total_fees } = feesData || {};
 
   // Flatten course_fees into an array of rows for the selected month
   const feeRows = course_fees && selectedMonth && course_fees[selectedMonth]

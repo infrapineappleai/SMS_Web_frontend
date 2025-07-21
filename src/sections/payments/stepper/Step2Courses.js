@@ -1,45 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../../../Styles/payment/stepper/Step2Courses.css'; // Ensure this CSS file exists
+const API_BASE_URL = "http://localhost:5000/api";
 
-const Step2Courses = ({ studentId, onMonthSelect }) => {
+const Step2Courses = ({ student_no,student_details_id, onMonthSelect }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [feesData, setFeesData] = useState(null);
   const [payments, setPayments] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(null); // Track selected month
 
-  useEffect(() => {
-    const fetchFees = async () => {
-      setLoading(true);
-      setError(null);
+ useEffect(() => {
+  const fetchFees = async () => {
+    setLoading(true);
+    setError(null);
+    console.log('Fetching fees for student_details_id:', student_details_id);
+    let effectiveStudentId = student_details_id;
+
+    if (!effectiveStudentId && student_no) {
       try {
-        const response = await axios.get(`https://pineappleai.cloud/api/sms/api/payment/${studentId}`, {
-          headers: { 'Content-Type': 'application/json' },
+        const searchResponse = await axios.get(API_BASE_URL + '/student/search', {
+          params: { student_no: student_no, _t: Date.now() }
         });
-        console.log('Fees data for studentId', studentId, ':', response.data);
-        setFeesData(response.data);
-        setPayments(response.data.payments || []);
-        // Set initial selected month to due_month from API
-        const dueMonth = response.data.due_month || Object.keys(response.data.course_fees || {})[0];
-        setSelectedMonth(dueMonth);
-        if (onMonthSelect) onMonthSelect(dueMonth); // Notify parent of initial month
+        const student = searchResponse.data;
+        if (student && student.student_details_id) {
+          effectiveStudentId = student.student_details_id;
+        } else {
+          setError('No valid student_details_id found for the given student_no.');
+          setLoading(false);
+          return;
+        }
       } catch (err) {
-        setError('Failed to fetch fees. Please try again.');
-        console.error('Error fetching fees:', err.response?.data || err.message);
-      } finally {
+        setError(`Failed to fetch student_details_id: ${err.message}`);
         setLoading(false);
+        return;
       }
-    };
-    if (studentId) fetchFees();
-  }, [studentId, onMonthSelect]);
+    }
+
+    if (!effectiveStudentId) {
+      setError('No valid student_details_id provided.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get(API_BASE_URL + `/payment/${effectiveStudentId}`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      console.log('Fees data response:', response.data);
+      const data = response.data;
+      setFeesData(data);
+      setPayments(data.payments || []);
+      const availableMonths = data.course_fees ? Object.keys(data.course_fees) : [];
+      const initialMonth = data.due_month || (availableMonths.length > 0 ? availableMonths[0] : null);
+      setSelectedMonth(initialMonth);
+      if (onMonthSelect && initialMonth) onMonthSelect(initialMonth);
+    } catch (err) {
+      setError(`Failed to fetch fees for student_details_id: ${effectiveStudentId}. ${err.response?.status} - ${err.response?.data?.message || err.message}`);
+      console.error('API Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchFees();
+}, [student_details_id, student_no, onMonthSelect]);
 
   if (loading) return <div className="step-container"><p>Loading...</p></div>;
   if (error) return <div className="step-container"><p className="error">{error}</p></div>;
-  if (!feesData) return <div className="step-container"><p>No data available.</p></div>;
+  if (!feesData) return <div className="step-container"><p>No data available for student_details_id: {student_details_id}.</p></div>;
 
   const { course_fees, total_course_fees, admission_fee, total_fees, due_month } = feesData;
-  const currentDate = new Date(); // July 02, 2025, 02:19 PM +0530
+  const currentDate = new Date(); // July 18, 2025, 09:48 PM +0530
   const currentYear = currentDate.getFullYear(); // 2025
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -50,19 +81,18 @@ const Step2Courses = ({ studentId, onMonthSelect }) => {
   const getMonthStatus = (month) => {
     if (paidMonths.includes(month)) return 'paid';
     if (due_month === month) return 'due';
-    if (course_fees && Object.keys(course_fees)[1] === month) return 'upcoming';
+    if (course_fees && month in course_fees) return 'upcoming';
     return '';
   };
 
-  // Determine if a month is clickable (only due month if not paid)
+  // Determine if a month is clickable (any month with course fees)
   const isMonthClickable = (month) => {
-    const isPaid = paidMonths.includes(month);
-    return due_month === month && !isPaid; // Only due month is clickable if not paid
+    return course_fees && month in course_fees; // Clickable if month exists in course_fees
   };
 
   // Handle month click
   const handleMonthClick = (month) => {
-    if (isMonthClickable(month) && course_fees && (month in course_fees)) {
+    if (isMonthClickable(month)) {
       setSelectedMonth(month);
       if (onMonthSelect) onMonthSelect(month); // Notify parent of selected month
     }
@@ -71,13 +101,13 @@ const Step2Courses = ({ studentId, onMonthSelect }) => {
   // Flatten course_fees into an array of rows for the selected month
   const feeRows = course_fees && selectedMonth && course_fees[selectedMonth]
     ? Object.entries(course_fees[selectedMonth]).flatMap(([grade, courses]) =>
-      Object.entries(courses).map(([courseName, fee]) => ({
-        month: selectedMonth,
-        courseName: courseName.charAt(0).toUpperCase() + courseName.slice(1),
-        grade: grade.replace('Grade ', ''),
-        fee,
-      }))
-    )
+        Object.entries(courses).map(([courseName, fee]) => ({
+          month: selectedMonth,
+          courseName: courseName.charAt(0).toUpperCase() + courseName.slice(1),
+          grade: grade.replace('Grade ', ''),
+          fee,
+        }))
+      )
     : [];
 
   console.log('Selected Month:', selectedMonth, 'Fee Rows:', feeRows, 'Course Fees:', course_fees, 'Due Month:', due_month); // Debug log
@@ -91,12 +121,6 @@ const Step2Courses = ({ studentId, onMonthSelect }) => {
             <select className="year-dropdown" defaultValue={currentYear}>
               <option>2025</option>
               <option>2024</option>
-              <option>2023</option>
-              <option>2022</option>
-              <option>2021</option>
-              <option>2020</option>
-              <option>2019</option>
-              <option>2018</option>
             </select>
             <div className="legend">
               <span className="legend-item paid">Paid</span>
@@ -144,7 +168,7 @@ const Step2Courses = ({ studentId, onMonthSelect }) => {
             ))
           ) : (
             <tr>
-              <td colSpan="4">No fee details available for student {studentId} for {selectedMonth}.</td>
+              <td colSpan="4">No fee details available for student {student_details_id} for {selectedMonth}.</td>
             </tr>
           )}
         </tbody>

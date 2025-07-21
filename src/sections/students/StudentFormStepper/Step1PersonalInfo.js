@@ -16,8 +16,8 @@ const Step1PersonalInfo = ({ formData, onChange, errors, onImageChange }) => {
         {/* Profile Upload Section */}
         <div className="profile-upload-section">
           <label htmlFor="profileUpload" className="profile-upload-label">
-            {formData.photo_url ? (
-              <img src={formData.photo_url} className="profile-preview" alt="Preview" />
+            {formData.previewUrl ? (
+              <img src={formData.previewUrl} className="profile-preview" alt="Preview" />
             ) : (
               <div className="upload-placeholder">Upload Image</div>
             )}
@@ -115,9 +115,9 @@ const Step1PersonalInfo = ({ formData, onChange, errors, onImageChange }) => {
                   onChange={handleInputChange}
                 >
                   <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
                 </select>
                 <img src={FilterIcon} alt="dropdown" className="input-icon dropdown-icon" />
               </div>

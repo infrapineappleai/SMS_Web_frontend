@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import '../../Styles/Course-css.css/AddCourseForm.css';
 import closeicon from '../../assets/icons/closeicon.png';
 import pencilIcon from '../../assets/icons/pencil_line.png';
@@ -7,14 +8,15 @@ import Toast from '../../modals/ToastModel';
 import successToastIcon from '../../assets/icons/Success.png';
 import DeleteConfirmModal from '../../modals/DeleteConfirmModal';
 import deleteToastIcon from '../../assets/icons/Delete.png';
-import { addCourse } from '../../integration/courseAPI'; // Only addCourse is needed
+import { getCourses, addCourse} from '../../integration/courseAPI';
+
 
 const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
   const [formData, setFormData] = useState({
     courseId: '',
     courseName: '',
     grade: '',
-    status: '',
+    status: 'Active',
     fees: '',
   });
   const [courses, setCourses] = useState([]);
@@ -25,27 +27,22 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
   const [isSuccess, setIsSuccess] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialCourse) {
-      setFormData({
+      const courseData = {
         courseId: initialCourse.id || '',
         courseName: initialCourse.name || '',
-        grade: initialCourse.details?.[0]?.grade || '',
-        status: initialCourse.status || '',
-        fees: initialCourse.details?.[0]?.fees?.toString() || '',
-      });
-      setCourses([{
-        courseId: initialCourse.id,
-        courseName: initialCourse.name,
-        grade: initialCourse.details?.[0]?.grade,
-        status: initialCourse.status,
-        fees: initialCourse.details?.[0]?.fees?.toString(),
-      }]);
-      setEditIndex(0);
-    } else {
-      // Reset courses when no initialCourse is provided
-      setCourses([]);
+        grade: initialCourse.grade || '',
+        status: initialCourse.status || 'Active',
+        fees: initialCourse.fees?.toString() || '',
+      };
+      setFormData(courseData);
+      if (initialCourse.id || initialCourse.name) {
+        setCourses([courseData]);
+        setEditIndex(0);
+      }
     }
   }, [initialCourse]);
 
@@ -62,35 +59,31 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.courseId || !formData.courseName || !formData.grade || !formData.status || !formData.fees) {
-      showToastNotification('Please fill in all fields before submitting.', false);
+    const { courseId, courseName, grade, status, fees } = formData;
+    if (!courseId || !courseName || !grade || !status || !fees) {
+      showToastNotification('Please fill in all fields.', false);
+      return;
+    }
+    if (isNaN(fees) || parseFloat(fees) <= 0) {
+      showToastNotification('Fees must be a positive number.', false);
       return;
     }
     if (editIndex !== null) {
       handleUpdate();
     } else {
-      setCourses(prevCourses => [...prevCourses, { ...formData }]);
-      setFormData({
-        courseId: '',
-        courseName: '',
-        grade: '',
-        status: '',
-        fees: '',
-      });
+      setCourses([...courses, { ...formData }]);
+      setFormData({ courseId: '', courseName: '', grade: '', status: 'Active', fees: '' });
       showToastNotification('Course added to list!');
     }
   };
 
   const handleClose = () => {
-    if (formData.courseId || formData.courseName || formData.grade || formData.status || formData.fees) {
+    if (formData.courseId || formData.courseName || formData.grade || formData.status !== 'Active' || formData.fees) {
       if (window.confirm('Are you sure you want to close? Unsaved data will be lost.')) {
         onClose();
       }
@@ -100,76 +93,67 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
   };
 
   const handleFinalSubmit = async () => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
   try {
-    console.log(' Courses array before submission:', courses);
-
-    if (!Array.isArray(courses) || courses.length === 0) {
+    if (!courses.length) {
       showToastNotification('No courses to submit.', false);
       return;
     }
 
-    const savedCourses = [];
-
-    // Filter out invalid course entries
-    const validCourses = courses.filter((course, index) => {
-      const courseId = course.courseId?.trim();
-      const courseName = course.courseName?.trim();
-      const grade = course.grade?.trim();
-      const status = course.status?.trim();
-      const fees = course.fees?.toString().trim();
-
+    const validCourses = courses.filter((course) => {
       const isValid =
-        courseId && courseName && grade && status && fees && !isNaN(parseInt(fees, 10));
-
-      if (!isValid) {
-        console.warn(`Skipping invalid course at index ${index}:`, course);
-      }
-
+        course.courseId?.trim() &&
+        course.courseName?.trim() &&
+        course.grade?.trim() &&
+        course.status?.trim() &&
+        course.fees?.toString().trim() &&
+        !isNaN(parseFloat(course.fees)) &&
+        parseFloat(course.fees) > 0;
+      if (!isValid) console.warn('Skipping invalid course:', course);
       return isValid;
     });
 
-    if (validCourses.length === 0) {
-      showToastNotification('All course entries are invalid. Please fill all fields properly.', false);
+    if (!validCourses.length) {
+      showToastNotification('All course entries are invalid.', false);
       return;
     }
 
-    for (const [index, course] of validCourses.entries()) {
-      console.log(`\n Submitting valid course at index ${index}:`, course);
-
-      const courseData = {
-        id: course.courseId.trim(),
-        name: course.courseName.trim(),
-        status: course.status.trim(),
-        details: [{
-          grade: course.grade.trim(),
-          fees: parseInt(course.fees.toString().trim(), 10),
-        }],
-        branch_id: 4, 
-      };
-
-      console.log(' Submitting courseData to API:', courseData);
-
-      const response = await addCourse(courseData);
-      savedCourses.push(response.data);
+    // Add to backend
+    for (const course of validCourses) {
+      await addCourse({
+        id: course.courseId,
+        name: course.courseName,
+        status: course.status || 'Active',
+        grades: [
+          {
+            grade_name: course.grade,
+            fees: parseFloat(course.fees),
+            status: course.status || 'Active',
+          },
+        ],
+      });
     }
 
-    showToastNotification(' Courses saved successfully!');
-    onSubmit(savedCourses);
+    // Fetch updated list from backend
+    const { data: updatedCourses } = await getCourses();
+
+    showToastNotification('Courses submitted successfully!');
+    onSubmit(updatedCourses); // pass the actual updated course data to CourseList
     setCourses([]);
+    setFormData({ courseId: '', courseName: '', grade: '', status: 'Active', fees: '' });
     onClose();
   } catch (error) {
-    console.error(' Submit Error:', error.response?.data || error.message);
-    showToastNotification(
-      error.response?.data?.error || error.message || 'Failed to save courses.',
-      false
-    );
+    console.error('Submit Error:', error);
+    showToastNotification(error.message || 'Failed to prepare courses.', false);
+  } finally {
+    setIsSubmitting(false);
   }
 };
 
 
   const handleEdit = (index) => {
-    const courseToEdit = courses[index];
-    setFormData({ ...courseToEdit });
+    setFormData({ ...courses[index] });
     setEditIndex(index);
   };
 
@@ -179,12 +163,10 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
   };
 
   const confirmDelete = () => {
-    if (deleteIndex !== null) {
-      setCourses(prevCourses => prevCourses.filter((_, i) => i !== deleteIndex));
-      showToastNotification('Course removed from list!');
-      setShowDeleteModal(false);
-      setDeleteIndex(null);
-    }
+    setCourses(courses.filter((_, i) => i !== deleteIndex));
+    showToastNotification('Course removed from list!');
+    setShowDeleteModal(false);
+    setDeleteIndex(null);
   };
 
   const cancelDelete = () => {
@@ -197,72 +179,99 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
       const updatedCourses = [...courses];
       updatedCourses[editIndex] = { ...formData };
       setCourses(updatedCourses);
-      setFormData({
-        courseId: '',
-        courseName: '',
-        grade: '',
-        status: '',
-        fees: '',
-      });
+      setFormData({ courseId: '', courseName: '', grade: '', status: 'Active', fees: '' });
       setEditIndex(null);
       showToastNotification('Course updated in list!');
     }
   };
+
+  const courseTable = useMemo(
+    () => (
+      <tbody className="table-body">
+        {courses.map((course, index) => (
+          <tr key={index}>
+            <td>{course.courseId}</td>
+            <td>{course.courseName}</td>
+            <td>{course.grade}</td>
+            <td>{course.status}</td>
+            <td>{course.fees}</td>
+            <td>
+              <button className="action-btn edit" onClick={() => handleEdit(index)} aria-label={`Edit course ${course.courseId}`}>
+                <img src={pencilIcon} alt="Edit" />
+              </button>
+              <button className="action-btn delete" onClick={() => handleDelete(index)} aria-label={`Delete course ${course.courseId}`}>
+                <img src={deleteIcon} alt="Delete" />
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    ),
+    [courses]
+  );
 
   return (
     <div className="course-catalog-overlay">
       <div className={`course-catalog-modal ${hasCourses ? 'expanded' : ''}`}>
         <div className="course-catalog-header">
           <h3>{initialCourse ? 'Edit Course' : 'Course Catalog'}</h3>
-          <button className="close-btn" onClick={handleClose}>
+          <button className="close-btn" onClick={handleClose} aria-label="Close modal">
             <img src={closeicon} alt="Close" />
           </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <div className="form-group">
-              <label>Course Code</label>
+              <label htmlFor="courseId">Course Code</label>
               <input
+                id="courseId"
                 type="text"
                 name="courseId"
                 value={formData.courseId}
                 onChange={handleChange}
                 placeholder="eg.099"
                 required
+                aria-required="true"
               />
             </div>
             <div className="form-group">
-              <label>Course Name</label>
+              <label htmlFor="courseName">Course Name</label>
               <input
+                id="courseName"
                 type="text"
                 name="courseName"
                 value={formData.courseName}
                 onChange={handleChange}
                 placeholder="eg.piano"
                 required
+                aria-required="true"
               />
             </div>
           </div>
           <h3>Course Record</h3>
           <div className="form-row">
             <div className="form-group">
-              <label>Grade</label>
+              <label htmlFor="grade">Grade</label>
               <input
+                id="grade"
                 type="text"
                 name="grade"
                 value={formData.grade}
                 onChange={handleChange}
                 placeholder="eg.02"
                 required
+                aria-required="true"
               />
             </div>
             <div className="form-group">
-              <label>Status</label>
+              <label htmlFor="status">Status</label>
               <select
+                id="status"
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
                 required
+                aria-required="true"
               >
                 <option value="" disabled>Select the Status</option>
                 <option value="Active">Active</option>
@@ -272,14 +281,16 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
             </div>
           </div>
           <div className="form-group">
-            <label>Fees</label>
+            <label htmlFor="fees">Fees</label>
             <input
+              id="fees"
               type="text"
               name="fees"
               value={formData.fees}
               onChange={handleChange}
               placeholder="eg.3000"
               required
+              aria-required="true"
             />
           </div>
           <button type="submit" className="button-btn">
@@ -291,32 +302,23 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
             <table className="courses-table">
               <thead>
                 <tr>
+                  <th>Course Code</th>
+                  <th>Course Name</th>
                   <th>Grade</th>
                   <th>Status</th>
                   <th>Fees(Rs)</th>
                   <th>Action</th>
                 </tr>
               </thead>
-              <tbody className="table-body">
-                {courses.map((course, index) => (
-                  <tr key={index}>
-                    <td>{course.grade}</td>
-                    <td>{course.status}</td>
-                    <td>{course.fees}</td>
-                    <td>
-                      <button className="action-btn edit" onClick={() => handleEdit(index)}>
-                        <img src={pencilIcon} alt="Edit" />
-                      </button>
-                      <button className="action-btn delete" onClick={() => handleDelete(index)}>
-                        <img src={deleteIcon} alt="Delete" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              {courseTable}
             </table>
-            <button type="button" className="submit-btn" onClick={handleFinalSubmit}>
-              Submit
+            <button
+              type="button"
+              className="submit-btn"
+              onClick={handleFinalSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit'}
             </button>
           </div>
         )}
@@ -328,7 +330,6 @@ const CourseCatalog = ({ onSubmit, onClose, initialCourse }) => {
         title={isSuccess ? 'Success' : 'Error'}
         message={toastMessage}
         icon={toastMessage.includes('deleted') ? deleteToastIcon : successToastIcon}
-        isDelete={toastMessage.includes('deleted')}
       />
       <DeleteConfirmModal
         isOpen={showDeleteModal}

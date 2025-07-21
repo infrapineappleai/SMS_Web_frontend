@@ -1,107 +1,178 @@
-
-
 import React, { useState, useEffect } from 'react';
 import '../../../Styles/Students-css/StudentFormStepper/Step4AcademicDetails.css';
 import FilterIcon from '../../../assets/icons/Filter.png';
 import { useToast } from '../../../modals/ToastProvider';
 import { getDropdownOptions } from '../../../integration/studentAPI';
+import EditIcon from '../../../assets/icons/Edit.png';
+import DeleteIcon from '../../../assets/icons/Delete.png';
 
 const Step4AcademicDetails = ({ formData, onChange, errors }) => {
   const { showToast } = useToast();
+
+  // Remove student_no from local state
   const [scheduleInput, setScheduleInput] = useState({
     branch: formData.branch || '',
-    student_no: formData.student_no || '',
     schedule_day: formData.schedule_day || '',
-    schedule_time: formData.schedule_time || ''
+    schedule_time: formData.schedule_time || '',
   });
-  const [dropdownOptions, setDropdownOptions] = useState({ branches: [], slots: [], courses: [], grades: [] });
-  const [loading, setLoading] = useState(true);
+
+  const [dropdownOptions, setDropdownOptions] = useState({ branches: [], slots: [] });
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   useEffect(() => {
-    const fetchOptions = async () => {
+    const fetchBranches = async () => {
       try {
-        setLoading(true);
-        const options = await getDropdownOptions();
-        console.log('Step4: Received dropdown options:', JSON.stringify(options, null, 2));
-        setDropdownOptions({
-          branches: options.branches || [],
-          slots: options.slots || [],
-          courses: options.courses || [],
-          grades: options.grades || []
-        });
-        if (!options.branches.length || !options.slots.length) {
-          showToast({ title: 'Warning', message: 'No branches or slots available', isError: true });
+        setLoadingBranches(true);
+        const branches = await getDropdownOptions('branches');
+        setDropdownOptions((prev) => ({ ...prev, branches: Array.isArray(branches) ? branches : [] }));
+        if (!branches.length) {
+          showToast({ title: 'Warning', message: 'No branches available.', isError: true });
         }
       } catch (error) {
-        console.error('Step4: Error fetching options:', error);
-        showToast({ title: 'Error', message: 'Failed to fetch branches/slots', isError: true });
+        showToast({ title: 'Error', message: `Failed to load branches: ${error.message || 'Unknown error'}`, isError: true });
       } finally {
-        setLoading(false);
+        setLoadingBranches(false);
       }
     };
-    fetchOptions();
+    fetchBranches();
   }, [showToast]);
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        setLoadingSlots(true);
+
+        const selectedBranch = dropdownOptions.branches.find((b) => b.branch_name === scheduleInput.branch);
+
+        if (!selectedBranch || !formData.course || !formData.grade) {
+          return;
+        }
+
+        const params = {
+          branchId: selectedBranch.id,
+          courseId: formData.course,
+          gradeId: formData.grade,
+        };
+
+        const slots = await getDropdownOptions('slots', params);
+        setDropdownOptions((prev) => ({ ...prev, slots: Array.isArray(slots) ? slots : [] }));
+
+        if (!slots.length) {
+          showToast({
+            title: 'Warning',
+            message: 'No available slots for selected branch, course, and grade.',
+            isError: true,
+          });
+        }
+      } catch (error) {
+        showToast({ title: 'Error', message: `Failed to load slots: ${error.message || 'Unknown error'}`, isError: true });
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+    fetchSlots();
+  }, [scheduleInput.branch, dropdownOptions.branches, formData.course, formData.grade, showToast]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setScheduleInput(prev => {
-      const updated = { ...prev, [name]: value };
-      if (name === 'branch' || name === 'schedule_day') {
-        updated.schedule_time = ''; // Reset schedule_time when branch or day changes
-      }
-      return updated;
-    });
-    onChange({
-      ...formData,
-      [name]: value,
-      schedule_time: (name === 'branch' || name === 'schedule_day') ? '' : formData.schedule_time
-    });
+    if (name === 'student_no') {
+      // Directly update formData for student_no (no local state)
+      onChange({ ...formData, student_no: value });
+    } else {
+      // For branch, schedule_day, schedule_time - update local state and propagate to formData
+      setScheduleInput((prev) => {
+        const updated = { ...prev, [name]: value };
+        if (name === 'branch' || name === 'schedule_day') {
+          updated.schedule_time = '';
+        }
+        return updated;
+      });
+      onChange({
+        ...formData,
+        [name]: value,
+        schedule_time: (name === 'branch' || name === 'schedule_day') ? '' : formData.schedule_time,
+      });
+    }
   };
 
   const handleAssign = (e) => {
     e.preventDefault();
-    const { branch, student_no, schedule_day, schedule_time } = scheduleInput;
+    const { branch, schedule_day, schedule_time } = scheduleInput;
+    const { student_no } = formData; // get student_no from formData now
+
     if (!branch || !student_no || !schedule_day || !schedule_time) {
       showToast({ title: 'Error', message: 'Branch, Student ID, Schedule Day, and Schedule Time are required', isError: true });
+      return;
+    }
+    const selectedSlot = filteredSlots.find((slot) => slot.day === schedule_day && slot.time === schedule_time);
+    if (!selectedSlot) {
+      showToast({ title: 'Error', message: 'Invalid slot selected', isError: true });
       return;
     }
     onChange({
       ...formData,
       branch,
-      student_no,
       schedule_day,
       schedule_time,
-      schedules: [...(formData.schedules || []), { id: Date.now(), branch, studentId: student_no, day: schedule_day, time: schedule_time }]
+      schedules: [...(formData.schedules || []), {
+        id: selectedSlot.id,
+        branch,
+        studentId: student_no,
+        day: schedule_day,
+        time: schedule_time,
+        course: formData.course || '',
+        grade: formData.grade || '',
+      }],
     });
     showToast({ title: 'Success', message: 'Schedule assigned successfully!' });
-    setScheduleInput(prev => ({ ...prev, schedule_day: '', schedule_time: '' }));
+    setScheduleInput((prev) => ({ ...prev, schedule_day: '', schedule_time: '' }));
   };
 
-  const availableDays = [...new Set(dropdownOptions.slots
-    .filter(slot => {
-      const selectedBranch = dropdownOptions.branches.find(b => b.branch_name === scheduleInput.branch);
-      const matchesBranch = selectedBranch ? slot.branch_id === selectedBranch.id : true;
-      return matchesBranch && slot.day && slot.day !== '0000-00-00';
-    })
-    .map(slot => slot.day))]
-    .sort(); // Sort days for better UX
+  const handleEditCourse = (id) => {
+    const existing = formData.schedules.find((s) => s.id === id);
+    if (existing) {
+      setScheduleInput({
+        branch: existing.branch,
+        schedule_day: existing.day,
+        schedule_time: existing.time,
+      });
+      const updated = formData.schedules.filter((s) => s.id !== id);
+      onChange({
+        ...formData,
+        schedules: updated,
+      });
+    }
+  };
 
-  const filteredSlots = dropdownOptions.slots.filter(slot => {
-    const selectedBranch = dropdownOptions.branches.find(b => b.branch_name === scheduleInput.branch);
-    const matchesBranch = selectedBranch ? slot.branch_id === selectedBranch.id : true;
+  const handleDeleteCourse = (id) => {
+    const updated = formData.schedules.filter((s) => s.id !== id);
+    onChange({
+      ...formData,
+      schedules: updated,
+    });
+    showToast({ title: 'Deleted', message: 'Schedule deleted successfully!', isError: false });
+  };
+
+  const availableDays = [...new Set(
+    dropdownOptions.slots
+      .filter((slot) => {
+        const selectedBranch = dropdownOptions.branches.find((b) => b.branch_name === scheduleInput.branch);
+        return selectedBranch ? String(slot.branch_id) === String(selectedBranch.id) : false;
+      })
+      .map((slot) => slot.day),
+  )].sort();
+
+  const filteredSlots = dropdownOptions.slots.filter((slot) => {
+    const selectedBranch = dropdownOptions.branches.find((b) => b.branch_name === scheduleInput.branch);
+    const matchesBranch = selectedBranch ? String(slot.branch_id) === String(selectedBranch.id) : false;
     const matchesDay = scheduleInput.schedule_day ? slot.day === scheduleInput.schedule_day : true;
-    return matchesBranch && matchesDay && slot.time && slot.day && slot.day !== '0000-00-00';
+    return matchesBranch && matchesDay && slot.time && slot.day;
   });
-
-  console.log('Step4: formData:', JSON.stringify(formData, null, 2));
-  console.log('Step4: scheduleInput:', JSON.stringify(scheduleInput, null, 2));
-  console.log('Step4: availableDays:', JSON.stringify(availableDays, null, 2));
-  console.log('Step4: filteredSlots:', JSON.stringify(filteredSlots, null, 2));
 
   return (
     <div className="step-four-fields">
       <h3 className="section-header">Academic Details</h3>
-      {loading && <div>Loading options...</div>}
       <div className="form-row">
         <div className="form-group">
           <label className="input-label">Branch</label>
@@ -111,10 +182,10 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
               className="input-box with-icon"
               value={scheduleInput.branch}
               onChange={handleInputChange}
-              disabled={loading}
+              disabled={loadingBranches}
             >
               <option value="">Select Branch</option>
-              {dropdownOptions.branches.map(branch => (
+              {dropdownOptions.branches.map((branch) => (
                 <option key={branch.id} value={branch.branch_name}>{branch.branch_name}</option>
               ))}
             </select>
@@ -128,7 +199,7 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
             name="student_no"
             type="text"
             className="input-box"
-            value={scheduleInput.student_no}
+            value={formData.student_no}
             placeholder="e.g. ST-001"
             onChange={handleInputChange}
           />
@@ -144,11 +215,11 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
               className="input-box with-icon"
               value={scheduleInput.schedule_day}
               onChange={handleInputChange}
-              disabled={loading || !scheduleInput.branch || !availableDays.length}
+              disabled={loadingSlots}
             >
               <option value="">Select Day</option>
               {availableDays.length > 0 ? (
-                availableDays.map(day => (
+                availableDays.map((day) => (
                   <option key={day} value={day}>{day}</option>
                 ))
               ) : (
@@ -167,15 +238,15 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
               className="input-box with-icon"
               value={scheduleInput.schedule_time}
               onChange={handleInputChange}
-              disabled={loading || !scheduleInput.branch || !scheduleInput.schedule_day || !filteredSlots.length}
+              disabled={loadingSlots || !scheduleInput.schedule_day}
             >
               <option value="">Select Time</option>
               {filteredSlots.length > 0 ? (
-                filteredSlots.map(slot => (
+                filteredSlots.map((slot) => (
                   <option key={slot.id} value={slot.time}>{slot.time}</option>
                 ))
               ) : (
-                <option value="" disabled>No available times for selected branch and day</option>
+                <option value="" disabled>No slots available</option>
               )}
             </select>
             <img src={FilterIcon} alt="dropdown" className="input-icon dropdown-icon" />
@@ -183,29 +254,55 @@ const Step4AcademicDetails = ({ formData, onChange, errors }) => {
           {errors.schedule_time && <span className="error">{errors.schedule_time}</span>}
         </div>
       </div>
-      <button type="button" className="assign-btn" onClick={handleAssign} disabled={loading}>
+      <button
+        type="button"
+        className="assign-btn"
+        onClick={handleAssign}
+        disabled={!scheduleInput.branch || !formData.student_no || !scheduleInput.schedule_day || !scheduleInput.schedule_time}
+      >
         Assign Schedule
       </button>
       {errors.schedules && <p className="error-msg">{errors.schedules}</p>}
-      {formData.schedules?.length > 0 && (
+      {formData.schedules?.length > 0 ? (
         <div className="assigned-table-wrapper">
           <table className="assigned-table">
             <thead>
               <tr>
-                <th className="day-col">Day</th>
-                <th className="time-col">Time</th>
+                <th>Branch</th>
+                <th>Student ID</th>
+                <th>Day</th>
+                <th>Time</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {formData.schedules.map(({ id, day, time }) => (
+              {formData.schedules.map(({ id, branch, studentId, day, time }) => (
                 <tr key={id}>
-                  <td className="day-col">{day}</td>
-                  <td className="time-col">{time}</td>
+                  <td>{branch}</td>
+                  <td>{studentId}</td>
+                  <td>{day}</td>
+                  <td>{time}</td>
+                  <td>
+                    <img
+                      src={EditIcon}
+                      alt="Edit"
+                      className="icon-btn edit-icon"
+                      onClick={() => handleEditCourse(id)}
+                    />
+                    <img
+                      src={DeleteIcon}
+                      alt="Delete"
+                      className="icon-btn delete-icon"
+                      onClick={() => handleDeleteCourse(id)}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      ) : (
+        <p className="error-msg">No schedules assigned.</p>
       )}
     </div>
   );

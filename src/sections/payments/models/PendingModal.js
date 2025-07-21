@@ -1,16 +1,67 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import axios from 'axios';
 import Close from '../../../assets/icons/Vector.png';
 import '../../../Styles/payment/Models/PendingModal.css';
 
-const PendingModal = ({ isOpen, onClose }) => {
-  const handleOverlayClick = (e) => {
-    if (e.target.classList.contains('modal-overlay')) {
+const API_BASE_URL = "http://localhost:5000/api";
+
+const PendingModal = ({ isOpen, onClose, paymentData }) => {
+  const [pendingPayments, setPendingPayments] = useState([]);
+  const [totalPending, setTotalPending] = useState(0);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
       onClose();
     }
-  };
+  }, [onClose]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
+  useEffect(() => {
+    const fetchPaymentHistory = async () => {
+      if (isOpen && paymentData?.student_details_id) {
+        setLoading(true);
+        try {
+          const studentId = paymentData.student_details_id;
+          const response = await axios.get(API_BASE_URL +`/payment-history/${studentId}`);
+          const { data } = response; // Expecting { name, course, grade, paidHistory, pendingHistory }
+          console.log('Fetched data:', data); // Debug log
+
+          // Set courses based on the returned data
+          setCourses([{ name: data.course, grades: [data.grade ? `grade ${data.grade}` : 'N/A'] }]);
+
+          // Process pending payments
+          const pending = data.pendingHistory.map(p => ({
+            month: new Date(p.date).toLocaleString('en-us', { month: 'long' }), // Show only month
+            amount: p.payment || 0,
+            status: p.status
+          }));
+          console.log('Processed pending payments:', pending); // Debug log
+
+          setPendingPayments(pending);
+          setTotalPending(pending.reduce((sum, p) => sum + (p.amount || 0), 0));
+        } catch (error) {
+          console.error('Error fetching payment history:', error);
+          // Fallback to paymentData if API fails
+          if (paymentData.amount && paymentData.payment_date) {
+            const month = new Date(paymentData.payment_date).toLocaleString('en-us', { month: 'long' }); // Show only month
+            setPendingPayments([{ month, amount: paymentData.amount, status: 'Pending' }]);
+            setTotalPending(paymentData.amount || 0);
+            setCourses(paymentData.course_name ? [{ name: paymentData.course_name, grades: [paymentData.grade_name || 'N/A'] }] : [{ name: 'Unknown', grades: ['N/A'] }]);
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    if (isOpen) {
+      fetchPaymentHistory();
+    }
+  }, [isOpen, paymentData]);
+
+  const handleOverlayClick = (e) => {
+    if (e.target.classList.contains('modal-overlay2')) {
       onClose();
     }
   };
@@ -27,7 +78,7 @@ const PendingModal = ({ isOpen, onClose }) => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.classList.remove('modal-open');
     };
-  }, [isOpen]);
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen) {
     return null;
@@ -39,14 +90,14 @@ const PendingModal = ({ isOpen, onClose }) => {
         <div className="modal-header">
           <h2 className="modal-title">Payment Details</h2>
           <button className="close-btn" onClick={onClose}>
-            <img src={Close} alt='close' className='close-icon'/>
+            <img src={Close} alt="close" className="close-icon" />
           </button>
         </div>
 
         <div className="modal-body">
           <div className="student-name">
             <span className="name-label">Name:</span>
-            <span className="name-value">Sushan Zir</span>
+            <span className="name-value">{paymentData?.full_name || 'N/A'}</span>
           </div>
 
           <div className="courses-container">
@@ -58,14 +109,14 @@ const PendingModal = ({ isOpen, onClose }) => {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Piano</td>
-                  <td>5</td>
-                </tr>
-                <tr>
-                  <td>Violin</td>
-                  <td>11</td>
-                </tr>
+                {courses.map((course, index) => (
+                  course.grades.map(grade => (
+                    <tr key={`${course.name}-${grade}-${index}`}>
+                      <td>{course.name}</td>
+                      <td>{grade}</td>
+                    </tr>
+                  ))
+                ))}
               </tbody>
             </table>
           </div>
@@ -86,139 +137,38 @@ const PendingModal = ({ isOpen, onClose }) => {
             <div className="payment-table-scroll">
               <table className="payment-table-body">
                 <tbody>
-                  <tr>
-                    <td>January</td>
-                    <td>3,500</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>February</td>
-                    <td>3,500</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>March</td>
-                    <td>4,000</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>April</td>
-                    <td>4,000</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>May</td>
-                    <td>4,200</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>June</td>
-                    <td>4,200</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>July</td>
-                    <td>4,500</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>August</td>
-                    <td>4,500</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>September</td>
-                    <td>4,800</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>October</td>
-                    <td>4,800</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>November</td>
-                    <td>5,000</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>December</td>
-                    <td>5,000</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Bonus Lesson</td>
-                    <td>2,500</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Workshop Fee</td>
-                    <td>3,000</td>
-                    <td>
-                      <span className="status-badge status-pending">
-                        Pending
-                      </span>
-                    </td>
-                  </tr>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '20px' }}>
+                        Loading pending payments...
+                      </td>
+                    </tr>
+                  ) : pendingPayments.length > 0 ? (
+                    pendingPayments.map((payment, index) => (
+                      <tr key={`${payment.month}-${index}`}>
+                        <td>{payment.month}</td>
+                        <td>{payment.amount.toLocaleString('en-US')}</td>
+                        <td>
+                          <span className="status-badge status-pending">
+                            {payment.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '20px' }}>
+                        No pending payments found
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
             
             <div className="total-summary">
               <span className="total-label">Total Pending</span>
-              <span className="total-amount">Rs. 57,500</span>
+              <span className="total-amount">Rs. {totalPending.toLocaleString('en-US')}</span>
             </div>
           </div>
         </div>

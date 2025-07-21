@@ -175,26 +175,6 @@ select {
   margin-top: 4px;
 }
 
-/* === Responsive Styling === */
-@media (max-width: 768px) {
-  .step1-top-row {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .upload-btn {
-    width: 100%;
-  }
-
-  .form-row {
-    flex-direction: column;
-  }
-
-  .form-group input,
-  .form-group select {
-    width: 100%;
-  }
-}
 
 .form-group textarea {
   padding: 10px;
@@ -226,7 +206,7 @@ select {
 /* Profile Image Label - Circle with dashed border */
 .profile-upload-label {
   cursor: pointer;
-  border: 2px dashed #1f6978;
+  border: 2px solid #1f6978;
   border-radius: 50%;
   width: 120px;
   height: 120px;
@@ -339,4 +319,79 @@ select {
   width: 14px;
   height: 8px;
   filter: grayscale(100%) brightness(0) sepia(1) hue-rotate(180deg) saturate(300%) contrast(0.8);
+}
+
+
+.input-icon calendar-icon{
+  color: #145360;
+}
+
+
+
+
+/* === Mobile Responsive for iOS & Android (≤ 480px) === */
+@media (max-width: 480px) {
+  .step-one-fields-with-image {
+    padding: 16px;
+    border-radius: 10px;
+  }
+
+  .step1-top-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  .profile-upload-section {
+    width: 100%;
+    align-items: center;
+  }
+
+  .profile-upload-label,
+  .upload-btn {
+    width: 100px;
+    height: 100px;
+  }
+
+  
+  .upload-placeholder {
+    font-size: 12px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .input-box.with-icon {
+    padding-right: 32px;
+  }
+
+  .input-icon {
+    width: 14px;
+    height: 14px;
+    right: 10px;
+  }
+
+  .section-header {
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .upload-btn {
+    width: 50%;
+    font-size: 14px;
+    width: 100px;
+    height: 50px;
+  }
 }

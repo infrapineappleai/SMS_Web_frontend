@@ -1,7 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
 import StudentsList from './StudentsList';
 import AddStudentForm from './StudentFormStepper/AddStudentForm';
-import { getAllStudents, createStudent, updateStudent, deleteStudent, searchStudents, filterStudents, filterStudentsByPayment, filterStudentsByCourse } from '../integration/studentAPI';
+import { getAllStudents, deleteStudent, searchStudents, filterStudents, filterStudentsByPayment, filterStudentsByCourse } from '../integration/studentAPI';
 import { useToast } from '../modals/ToastProvider';
 
 const StudentsPage = () => {
@@ -70,10 +72,24 @@ const StudentsPage = () => {
     applyFilters();
   }, [students, stateFilter, paymentFilter, courseFilter, searchQuery, showToast]);
 
-  const handleAddStudent = async (studentData) => {
+  const handleAddStudent = async (updatedStudent) => {
     try {
-      setStudents(prev => [...prev, studentData]);
-      setFilteredStudents(prev => [...prev, studentData]);
+      setStudents(prev => {
+        if (editStudent?.id && updatedStudent.id === editStudent.id) {
+          return prev.map(s => (s.id === updatedStudent.id ? updatedStudent : s));
+        }
+        return [...prev, updatedStudent];
+      });
+      setFilteredStudents(prev => {
+        if (editStudent?.id && updatedStudent.id === editStudent.id) {
+          return prev.map(s => (s.id === updatedStudent.id ? updatedStudent : s));
+        }
+        return [...prev, updatedStudent];
+      });
+      showToast({
+        title: 'Success',
+        message: editStudent ? 'Student updated successfully!' : 'Student created successfully!',
+      });
       setIsAddOpen(false);
       setEditStudent(null);
     } catch (e) {
@@ -151,7 +167,7 @@ const StudentsPage = () => {
           style={{ padding: '8px' }}
           aria-label="Filter by course"
         >
-          <option value="">All Courses</option>
+          <option value="">Courses</option>
           <option value="Violin">Violin</option>
           <option value="Piano">Piano</option>
           <option value="Guitar">Guitar</option>
@@ -180,6 +196,7 @@ const StudentsPage = () => {
         }}
         onAddStudent={handleAddStudent}
         initialData={editStudent}
+        isEditMode={!!editStudent}
       />
     </div>
   );

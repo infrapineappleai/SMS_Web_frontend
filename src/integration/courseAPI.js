@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://pineappleai.cloud/api/sms/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -9,45 +9,51 @@ const apiClient = axios.create({
   },
 });
 
-const transformCourseData = (course) => {
-  if (!course) return null;
+const retryRequest = async (fn, retries = 2, delay = 1000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.code === 'ERR_NETWORK' && i < retries - 1) {
+        console.log(`Retry ${i + 1}/${retries} after ${delay}ms due to network error`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
 
-  return {
+const transformCourseData = (course) => {
+  if (!course) {
+    console.warn('transformCourseData: No course data provided');
+    return null;
+  }
+  const transformed = {
     uniqueId: course?.id?.toString() || '',
     id: course?.course_code || '',
     name: course?.name || '',
     status: course?.status || 'Active',
-    grades: (course?.grades || []).map(grade => {
+    grades: (course?.grade || []).map(grade => {
       const fee = grade.gradeFees?.[0] || {};
       return {
         uniqueId: grade?.id?.toString() || '',
         grade: grade?.grade_name || '',
         fees: fee?.fee || 0,
         status: grade?.status || 'Active',
-        branchId: fee?.branch?.id?.toString() || '',
+        branchId: fee?.branch?.id?.toString() || '1',
         gradeFeeId: fee?.id ? fee.id.toString() : ''
       };
     }) || []
   };
-};
-
-const getDefaultBranchId = async () => {
-  try {
-    const response = await apiClient.get('/branch');
-    if (response.data.length > 0) {
-      return response.data[0].id;
-    }
-    throw new Error('No branches available');
-  } catch (error) {
-    console.error('Failed to get default branch ID:', error);
-    throw error;
-  }
+   
+  return transformed;
 };
 
 export const getCourses = async () => {
   try {
-    const response = await apiClient.get('/course');
-    
+    console.log('Fetching courses');
+    const response = await retryRequest(() => apiClient.get('/course'));
     let courses = [];
     if (Array.isArray(response.data)) {
       courses = response.data;
@@ -63,16 +69,17 @@ export const getCourses = async () => {
 
     return { data: transformedCourses };
   } catch (error) {
-    console.error('Get Courses Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to fetch courses');
+    console.error('Get Courses Error:', error, error.response?.data);
+    throw new Error(error.response?.data?.error || error.message || 'Failed to fetch courses');
   }
 };
 
 export const searchCourses = async (searchTerm) => {
   try {
-    const response = await apiClient.get('/course/search', {
+    console.log('Searching courses with term:', searchTerm);
+    const response = await retryRequest(() => apiClient.get('/course/search', {
       params: { query: searchTerm }
-    });
+    }));
     let courses = response.data.courses || response.data;
     if (!Array.isArray(courses)) {
       courses = [courses];
@@ -81,105 +88,185 @@ export const searchCourses = async (searchTerm) => {
       data: courses.map(transformCourseData) 
     };
   } catch (error) {
-    console.error('Search Courses Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to search courses');
+    console.error('Search Courses Error:', error, error.response?.data);
+    throw new Error(error.response?.data?.error || error.message || 'Failed to search courses');
   }
 };
 
 export const addCourse = async (courseData) => {
   try {
-    const grades = courseData.grades?.length > 0 ? 
-      await Promise.all(courseData.grades.map(async detail => {
-        const branchId = detail.branchId || await getDefaultBranchId();
-        return {
-          grade_name: detail.grade,
-          status: detail.status || 'Active',
-          gradeFees: [{
-            fee: parseFloat(detail.fees) || 0,
-            branch_id: branchId
-          }]
-        };
-      })) : [];
+    console.log('Adding course:', JSON.stringify(courseData, null, 2));
+    if (!courseData.id?.trim?.() || !courseData.name?.trim?.()) {
+      throw new Error('Course code and name are required');
+    }
 
-    const response = await apiClient.post('/course', {
-      course_code: courseData.id,
-      name: courseData.name,
-      status: courseData.status || 'Active',
-      ...(grades.length > 0 && { grades })
+    const grades = (courseData.grades || []).map(detail => {
+      if (!detail.grade_name?.trim?.() || !detail.fees) {
+        throw new Error('Grade name and fees are required for each detail');
+      }
+      return {
+        grade_name: detail.grade_name.trim?.(),
+        status: detail.status?.trim?.() || 'Active',
+        gradeFees: [
+          {
+            fee: parseFloat(detail.fees) || 0,
+            branch_id: parseInt(detail.branch_id || 1, 10),
+          },
+        ],
+      };
     });
 
-    return { 
-      data: transformCourseData(response.data) 
+    const payload = {
+      course_code: courseData.id.trim?.(),
+      name: courseData.name.trim?.(),
+      status: courseData.status?.trim?.() || 'Active',
+      grades,
+    };
+
+    console.log('Payload sent to backend:', JSON.stringify(payload, null, 2));
+
+    const response = await retryRequest(() => apiClient.post('/course', payload));
+
+    console.log('Backend response:', JSON.stringify(response.data, null, 2));
+
+    return {
+      data: transformCourseData(response.data),
     };
   } catch (error) {
-    console.error('Add Course Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to add course');
+    console.error('Add Course Error:', error, error.response?.data);
+    throw new Error(error.response?.data?.error || error.message || 'Failed to add course');
   }
 };
 
-export const updateCourse = async (uniqueId, courseData) => {
+export const updateCourse = async (courseId, payload) => {
   try {
-    const response = await apiClient.patch(`/course/${uniqueId}`, courseData);
-    
-    const updatedCourse = {
-      uniqueId: response.data.id?.toString() || uniqueId,
-      id: response.data.course_code || courseData.id,
-      name: response.data.name || courseData.name,
-      status: response.data.status || courseData.status,
-      details: (response.data.grades || []).map(grade => ({
-        uniqueId: grade.id?.toString() || '',
-        grade: grade.grade_name || '',
-        fees: (grade.gradeFees?.[0]?.fee || 0).toString(),
-        status: grade.status || 'Active',
-        gradeFeeId: grade.gradeFees?.[0]?.id?.toString() || ''
-      }))
-    };
-    
-    return { 
-      data: updatedCourse 
-    };
+    if (!courseId || isNaN(courseId)) {
+      throw new Error('Invalid course ID');
+    }
+    const validPayload = {};
+    if (payload.course_code) validPayload.course_code = payload.course_code.trim();
+    if (payload.name) validPayload.name = payload.name.trim();
+    if (payload.status) validPayload.status = payload.status.trim();
+
+    if (Object.keys(validPayload).length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    console.log("Updating course:", courseId, JSON.stringify(validPayload, null, 2));
+
+    const response = await retryRequest(() =>
+      apiClient.patch(`/course/${courseId}`, validPayload)
+    );
+
+    console.log("Update response:", JSON.stringify(response.data, null, 2), "Status:", response.status);
+
+    return response.data;
   } catch (error) {
-    console.error('Update Course Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to update course');
+    console.error("Update Course Error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'Update failed'
+    );
   }
 };
 
 export const deleteCourse = async (uniqueId) => {
   try {
+    console.log('Deleting course:', uniqueId);
     const courseId = parseInt(uniqueId);
     if (isNaN(courseId)) throw new Error('Invalid course ID');
     
-    await apiClient.delete(`/course/${courseId}`);
+    const response = await retryRequest(() => apiClient.delete(`/course/${courseId}`));
+    console.log('Delete course response:', JSON.stringify(response.data, null, 2));
     return { 
       message: 'Course deleted successfully' 
     };
   } catch (error) {
-    console.error('Delete Course Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to delete course');
+    console.error('Delete Course Error:', error, error.response?.data);
+    throw new Error(error.response?.data?.error || error.message || 'Failed to delete course');
   }
 };
 
-export const deleteCourseDetail = async (courseId, gradeFeeId) => {
-  if (!gradeFeeId || isNaN(parseInt(gradeFeeId))) {
-    throw new Error('Invalid grade fee ID');
-  }
-  
+export const deleteGradeAndFee = async (courseId, gradeFeeId) => {
   try {
-    await apiClient.delete(`/grade-fee/${gradeFeeId}`);
+    console.log('Deleting grade and fee:', { courseId, gradeFeeId });
+    if (!gradeFeeId || isNaN(parseInt(gradeFeeId))) {
+      throw new Error('Invalid grade fee ID');
+    }
+    if (!courseId || isNaN(parseInt(courseId))) {
+      throw new Error('Invalid course ID');
+    }
+
+    // Delete the grade fee using the course-specific endpoint
+    const response = await retryRequest(() => 
+      apiClient.delete(`/course/${courseId}/grade-fee/${gradeFeeId}`)
+    );
+    console.log('Delete grade fee response:', JSON.stringify(response.data, null, 2), 'Status:', response.status);
+
     return { 
-      message: 'Course detail deleted successfully' 
+      success: response.data.success,
+      message: response.data.message,
+      data: response.data.data
     };
   } catch (error) {
-    console.error('Delete Course Detail Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to delete course detail');
+    console.error('Delete Grade and Fee Error:', error, error.response?.data);
+    throw new Error(
+      error.response?.data?.message || 
+      error.response?.data?.error || 
+      error.message || 
+      'Failed to delete grade and fee'
+    );
   }
 };
-export const getBranches = async () => {
+
+export const updateGrade = async (courseId, gradeData) => {
   try {
-    const response = await apiClient.get('/branch');
+    if (!courseId || isNaN(courseId)) {
+      throw new Error('Invalid course ID');
+    }
+    const validPayload = {
+      grades: [{
+        id: gradeData.gradeId,
+        grade_name: gradeData.grade,
+        status: gradeData.status || 'Active',
+        gradeFees: [{
+          id: gradeData.gradeFeeId,
+          fee: parseFloat(gradeData.fees) || 0,
+          branch_id: parseInt(gradeData.branchId || 1, 10)
+        }]
+      }]
+    };
+
+    console.log("Updating grade:", courseId, JSON.stringify(validPayload, null, 2));
+
+    const response = await retryRequest(() =>
+      apiClient.patch(`/course/${courseId}`, validPayload)
+    );
+
+    console.log("Update response:", JSON.stringify(response.data, null, 2), "Status:", response.status);
+
     return response.data;
   } catch (error) {
-    console.error('Get Branches Error:', error);
-    throw new Error(error.response?.data?.error || 'Failed to fetch branches');
+    console.error("Update Grade Error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'Update failed'
+    );
+  }
+};
+
+export const getBranches = async () => {
+  try {
+    console.log('Fetching branches');
+    const response = await retryRequest(() => apiClient.get('/branch'));
+    console.log('Branches fetched:', JSON.stringify(response.data, null, 2));
+    return response.data;
+  } catch (error) {
+    console.error('Get Branches Error:', error, error.response?.data);
+    throw new Error(error.response?.data?.error || error.message || 'Failed to fetch branches');
   }
 };

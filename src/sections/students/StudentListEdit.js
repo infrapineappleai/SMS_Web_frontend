@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StudentDetailsPopup from './StudentDetailsPopup'; // adjust path as needed
+import StudentDetailsPopup from './StudentDetailsPopup'; 
 
 const StudentsList = ({ students }) => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -30,7 +30,6 @@ const StudentsList = ({ students }) => {
         onClose={() => setIsPopupOpen(false)}
         studentData={selectedStudent}
         onSave={(updated) => {
-          // optional: update list with new data
           setIsPopupOpen(false);
         }}
       />

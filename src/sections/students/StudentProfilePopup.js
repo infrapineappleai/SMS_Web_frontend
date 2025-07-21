@@ -1,11 +1,6 @@
-
-
-
-
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Modal from "react-modal";
 import "../../Styles/Students-css/SummaryPopup.css";
-
 import CloseIcon from "../../assets/icons/Close.png";
 import UserIcon from "../../assets/icons/User.png";
 import AddressIcon from "../../assets/icons/Address.png";
@@ -16,6 +11,8 @@ import WhatsAppIcon from "../../assets/icons/WhatsApp.png";
 import PhoneIcon from "../../assets/icons/Phone.png";
 import BranchIcon from "../../assets/icons/Branch.png";
 import StudentIcon from "../../assets/icons/Student.png";
+import { useToast } from "../../modals/ToastProvider";
+import { updateStudent } from "../../integration/studentAPI";
 
 const StudentProfilePopup = ({
   isOpen,
@@ -27,9 +24,16 @@ const StudentProfilePopup = ({
   onPrevious,
   mode = "profile",
 }) => {
+  const { showToast } = useToast();
+  const [updatedData, setUpdatedData] = useState(studentData);
+
+  useEffect(() => {
+    console.log('StudentProfilePopup studentData:', studentData); // Debug
+    setUpdatedData(studentData);
+  }, [studentData, isOpen]);
+
   if (!isOpen || !studentData) return null;
 
-  // Helper to normalize photo URL
   const getFullImageUrl = (url) => {
     if (!url) return "/default-avatar.png";
     if (url.startsWith("http") || url.startsWith("data:image/")) return url;
@@ -37,6 +41,51 @@ const StudentProfilePopup = ({
   };
 
   const profileImageUrl = getFullImageUrl(studentData.photo_url);
+  console.log("Profile Image URL:", profileImageUrl);
+
+  const assignedCourses = Array.isArray(studentData.assignedCourses) ? studentData.assignedCourses : [];
+  const schedules = Array.isArray(studentData.schedules) ? studentData.schedules : [];
+  const branch = studentData.branch || "N/A";
+
+  const handleUpdate = async () => {
+    try {
+      const payload = {
+        salutation: updatedData.salutation || '',
+        first_name: updatedData.first_name || '',
+        last_name: updatedData.last_name || '',
+        email: updatedData.email || '',
+        phn_num: updatedData.phn_num || '',
+        ice_contact: updatedData.ice_contact || updatedData.phn_num || '',
+        address: updatedData.address || '',
+        gender: updatedData.gender || '',
+        date_of_birth: updatedData.date_of_birth || '',
+        student_no: updatedData.student_no || '',
+        status: (updatedData.status || 'active').toLowerCase(),
+        photoFile: updatedData.photoFile,
+        photo_url: updatedData.photo_url,
+        assignedCourses,
+        schedules,
+        branch,
+      };
+
+      const response = await updateStudent(studentData.id || studentData.user_id, payload);
+      showToast({ title: 'Success', message: 'Student updated successfully!' });
+      setUpdatedData(response);
+      onSave?.(response);
+      onClose();
+    } catch (error) {
+      console.error('StudentProfilePopup: Error updating student:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      showToast({
+        title: 'Error',
+        message: error.message || 'Failed to update student',
+        isError: true,
+      });
+    }
+  };
 
   return (
     <Modal
@@ -70,7 +119,7 @@ const StudentProfilePopup = ({
           <div className="info-2col">
             <div className="info-block full-name">
               <div className="info-label">
-                <img src={UserIcon} alt="Full Name" className="user-icon" />
+                <img src={UserIcon} alt="Full Name" className="icon" />
                 <span>Full Name</span>
               </div>
               <div className="info-value">
@@ -82,7 +131,7 @@ const StudentProfilePopup = ({
 
             <div className="info-block address">
               <div className="info-label">
-                <img src={AddressIcon} alt="Address" className="Address-icon" />
+                <img src={AddressIcon} alt="Address" className="icon" />
                 <span>Address</span>
               </div>
               <div className="info-value">{studentData.address || "N/A"}</div>
@@ -90,7 +139,7 @@ const StudentProfilePopup = ({
 
             <div className="info-block dob">
               <div className="info-label">
-                <img src={CalendarIcon} alt="DOB" className="DOB-icon" />
+                <img src={CalendarIcon} alt="DOB" className="icon" />
                 <span>Date of Birth</span>
               </div>
               <div className="info-value">
@@ -100,7 +149,7 @@ const StudentProfilePopup = ({
 
             <div className="info-block gender">
               <div className="info-label">
-                <img src={GenderIcon} alt="Gender" className="Gender-icon" />
+                <img src={GenderIcon} alt="Gender" className="icon" />
                 <span>Gender</span>
               </div>
               <div className="info-value">{studentData.gender || "N/A"}</div>
@@ -113,7 +162,7 @@ const StudentProfilePopup = ({
           <div className="info-2col">
             <div className="info-block">
               <div className="info-label">
-                <img src={EmailIcon} alt="Email" className="Email-icon" />
+                <img src={EmailIcon} alt="Email" className="icon" />
                 <span>Email Address</span>
               </div>
               <div className="info-value">{studentData.email || "N/A"}</div>
@@ -121,11 +170,7 @@ const StudentProfilePopup = ({
 
             <div className="info-block">
               <div className="info-label">
-                <img
-                  src={WhatsAppIcon}
-                  alt="Phone Number"
-                  className="WhatsApp-icon"
-                />
+                <img src={WhatsAppIcon} alt="Phone Number" className="icon" />
                 <span>Phone Number</span>
               </div>
               <div className="info-value">{studentData.phn_num || "N/A"}</div>
@@ -133,7 +178,7 @@ const StudentProfilePopup = ({
 
             <div className="info-block">
               <div className="info-label">
-                <img src={PhoneIcon} alt="ICE Contact" className="ICE-icon" />
+                <img src={PhoneIcon} alt="ICE Contact" className="icon" />
                 <span>ICE Contact</span>
               </div>
               <div className="info-value">
@@ -145,7 +190,7 @@ const StudentProfilePopup = ({
 
         <section className="summary-section scrollable-section">
           <h3>Educational Records</h3>
-          <div className="course-table-wrapper">
+          <div className="scroll-table">
             <table>
               <thead>
                 <tr>
@@ -154,8 +199,8 @@ const StudentProfilePopup = ({
                 </tr>
               </thead>
               <tbody>
-                {(studentData.assignedCourses || []).length > 0 ? (
-                  studentData.assignedCourses.map((c, i) => (
+                {assignedCourses.length > 0 ? (
+                  assignedCourses.map((c, i) => (
                     <tr key={i}>
                       <td>{c.course || "N/A"}</td>
                       <td>{c.grade || "N/A"}</td>
@@ -176,15 +221,15 @@ const StudentProfilePopup = ({
           <div className="info-2col">
             <div className="info-block">
               <div className="info-label">
-                <img src={BranchIcon} alt="Branch" className="Branch-icon" />
+                <img src={BranchIcon} alt="Branch" className="icon" />
                 <span>Branch</span>
               </div>
-              <div className="info-value">{studentData.branch || "N/A"}</div>
+              <div className="info-value">{branch}</div>
             </div>
 
             <div className="info-block">
               <div className="info-label">
-                <img src={StudentIcon} alt="Student ID" className="ID-icon" />
+                <img src={StudentIcon} alt="Student ID" className="icon" />
                 <span>Student ID</span>
               </div>
               <div className="info-value">
@@ -195,6 +240,7 @@ const StudentProfilePopup = ({
         </section>
 
         <section className="summary-section scrollable-section">
+          <h3>Schedule</h3>
           <div className="scroll-table">
             <table>
               <thead>
@@ -204,8 +250,8 @@ const StudentProfilePopup = ({
                 </tr>
               </thead>
               <tbody>
-                {(studentData.schedules || []).length > 0 ? (
-                  studentData.schedules.map((s, i) => (
+                {schedules.length > 0 ? (
+                  schedules.map((s, i) => (
                     <tr key={i}>
                       <td>{s.day || "N/A"}</td>
                       <td>{s.time || "N/A"}</td>
@@ -233,9 +279,11 @@ const StudentProfilePopup = ({
             </>
           )}
           {mode === "profile" && (
-            <button className="edit-btn" onClick={() => onEdit(studentData)}>
-              Edit
-            </button>
+            <>
+              <button className="edit-btn" onClick={() => onEdit(studentData)}>
+                Edit
+              </button>
+            </>
           )}
           {mode === "edit-summary" && (
             <button className="save-btn" onClick={onUpdate}>

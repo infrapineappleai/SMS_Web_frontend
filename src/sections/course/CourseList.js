@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import '../../Styles/Course-css.css/CourseList.css';
 import filterIcon from '../../assets/icons/filter2.png';
 import closeicon from '../../assets/icons/closeicon.png';
@@ -8,7 +8,40 @@ import Toast from '../../modals/ToastModel';
 import deleteToastIcon from '../../assets/icons/Delete.png';
 import successToastIcon from '../../assets/icons/Success.png';
 import CourseActions from '../course/CourseActions';
-import { getCourses, addCourse, updateCourse, deleteCourse, deleteCourseDetail, searchCourses } from '../../integration/courseAPI';
+import { getCourses, addCourse, updateCourse, deleteCourse, deleteGradeAndFee, searchCourses, updateGrade } from '../../integration/courseAPI';
+
+// Grouping function for courses
+const groupCourses = (courses) => {
+  const groups = {};
+  courses.forEach(course => {
+    if (!groups[course.id]) {
+      groups[course.id] = {
+        id: course.id,
+        uniqueId: course.uniqueId || course.id.toString(),
+        name: course.name,
+        status: course.status || 'Active',
+        allGrades: (course.grades || []).map(grade => ({
+          ...grade,
+          courseUniqueId: course.uniqueId || course.id.toString()
+        })),
+        uniqueIds: [course.uniqueId || course.id.toString()],
+        courseData: [course]
+      };
+    } else {
+      const newGrades = (course.grades || []).map(grade => ({
+        ...grade,
+        courseUniqueId: course.uniqueId || course.id.toString()
+      }));
+      groups[course.id] = {
+        ...groups[course.id],
+        allGrades: [...groups[course.id].allGrades, ...newGrades],
+        uniqueIds: [...groups[course.id].uniqueIds, course.uniqueId || course.id.toString()],
+        courseData: [...groups[course.id].courseData, course]
+      };
+    }
+  });
+  return Object.values(groups);
+};
 
 const CourseList = () => {
   const [courses, setCourses] = useState([]);
@@ -22,6 +55,9 @@ const CourseList = () => {
   const [statusFilter, setStatusFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCourseCatalog, setShowCourseCatalog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const [toast, setToast] = useState({
     showToast: false,
     isError: false,
@@ -34,60 +70,71 @@ const CourseList = () => {
   const courseOptions = ['All', 'Piano', 'Mridangam', 'Keyboard', 'Violin'];
   const statusOptions = ['Active', 'Inactive', 'Completed'];
 
+  const groupedCourses = useMemo(() => groupCourses(courses), [courses]);
+
   useEffect(() => {
     const fetchCourses = async () => {
       try {
         const response = await getCourses();
         setCourses(response.data);
       } catch (error) {
+        console.error('Fetch courses error:', error);
         setToast({
           showToast: true,
           isError: true,
           title: 'Error',
-          message: error.message,
+          message: error.message || 'Failed to fetch courses',
           icon: deleteToastIcon,
         });
-        setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+        setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 2000);
       }
     };
     fetchCourses();
   }, []);
 
   useEffect(() => {
+    if (isDeleting || isUpdating || showCourseCatalog || editCourse || detailEditCourse) {
+      return;
+    }
     const fetchSearchResults = async () => {
-      if (searchTerm) {
-        try {
-          const response = await searchCourses(searchTerm);
-          setCourses(response.data);
-        } catch (error) {
-          console.error('Search error:', error);
-        }
-      } else {
-        const fetchCourses = async () => {
-          try {
-            const response = await getCourses();
-            setCourses(response.data);
-          } catch (error) {
-            setToast({
-              showToast: true,
-              isError: true,
-              title: 'Error',
-              message: error.message,
-              icon: deleteToastIcon,
-            });
-            setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
-          }
-        };
-        fetchCourses();
+      try {
+        const response = searchTerm ? await searchCourses(searchTerm) : await getCourses();
+        setCourses(response.data);
+      } catch (error) {
+        console.error('Search error:', error);
+        setToast({
+          showToast: true,
+          isError: true,
+          title: 'Error',
+          message: error.message || 'Failed to search courses',
+          icon: deleteToastIcon,
+        });
+        setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
       }
     };
     fetchSearchResults();
-  }, [searchTerm]);
+  }, [searchTerm, isDeleting, isUpdating, showCourseCatalog, editCourse, detailEditCourse]);
 
-  const handleDeleteConfirm = async (uniqueId) => {
+  const refreshCourses = async () => {
     try {
-      await deleteCourse(uniqueId);
-      setCourses(courses.filter((course) => course.uniqueId !== uniqueId));
+      const response = await getCourses();
+      setCourses(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Refresh courses error:', error);
+      return [];
+    }
+  };
+
+  const handleGroupDelete = async (courseId) => {
+    try {
+      setIsDeleting(true);
+      const group = groupedCourses.find(g => g.id === courseId);
+      if (!group) return;
+
+      await Promise.all(group.uniqueIds.map(id => deleteCourse(id)));
+      
+      await refreshCourses();
       setShowDeleteConfirm(null);
       setSelectedCourse(null);
       setToast({
@@ -95,24 +142,69 @@ const CourseList = () => {
         isError: false,
         isDelete: true,
         title: 'Success',
-        message: 'Course deleted successfully',
+        message: 'Course and all grades deleted successfully',
         icon: deleteToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
     } catch (error) {
+      console.error('Delete group error:', error);
       setToast({
         showToast: true,
         isError: true,
         title: 'Error',
-        message: error.message,
+        message: error.message || 'Failed to delete course group',
         icon: deleteToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDetailDeleteConfirm = async (courseUniqueId, gradeFeeId) => {
+    try {
+      setIsDeleting(true);
+      if (!gradeFeeId || isNaN(parseInt(gradeFeeId))) {
+        throw new Error('Invalid grade fee ID');
+      }
+      const response = await deleteGradeAndFee(courseUniqueId, gradeFeeId);
+      
+      const updatedCourses = await refreshCourses();
+      
+      if (selectedCourse) {
+        const newGroups = groupCourses(updatedCourses);
+        const updatedGroup = newGroups.find(g => g.id === selectedCourse.id);
+        setSelectedCourse(updatedGroup || null);
+      }
+
+      setShowDeleteConfirm(null);
+      setToast({
+        showToast: true,
+        isError: false,
+        isDelete: true,
+        title: 'Success',
+        message: response.message,
+        icon: deleteToastIcon,
+      });
+      setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+    } catch (error) {
+      console.error('Delete grade fee error:', error);
+      setToast({
+        showToast: true,
+        isError: true,
+        title: 'Error',
+        message: error.message || 'Failed to delete grade and fee',
+        icon: deleteToastIcon,
+      });
+      setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleDeleteCancel = () => {
     setShowDeleteConfirm(null);
+    setIsDeleting(false);
   };
 
   const handleCourseFilterClick = () => {
@@ -142,26 +234,28 @@ const CourseList = () => {
 
   const handleCourseCatalogSubmit = async (newCourses) => {
     try {
-      for (const course of newCourses) {
-        const formattedCourse = {
-          id: course.courseId,
-          name: course.courseName,
-          status: course.status,
-          details: [{ grade: course.grade, fees: course.fees, status: course.status }],
-          branch_id: 1,
-        };
+      const formattedCourses = newCourses.map((course) => ({
+        id: course.courseId.trim(),
+        name: course.courseName.trim(),
+        status: course.status || 'Active',
+        grades: [
+          {
+            grade: course.grade.trim(),
+            fees: parseFloat(course.fees),
+            status: course.status || 'Active',
+          },
+        ],
+      }));
+
+      for (const course of formattedCourses) {
         if (editCourse) {
-          await updateCourse(editCourse.uniqueId, formattedCourse);
-          setCourses((prevCourses) =>
-            prevCourses.map((c) =>
-              c.uniqueId === editCourse.uniqueId ? { ...formattedCourse, uniqueId: editCourse.uniqueId } : c
-            )
-          );
+          await updateCourse(editCourse.uniqueId, course);
         } else {
-          const response = await addCourse(formattedCourse);
-          setCourses((prevCourses) => [...prevCourses, response.data]);
+          await addCourse(course);
         }
       }
+
+      await refreshCourses();
       setToast({
         showToast: true,
         isError: false,
@@ -173,13 +267,13 @@ const CourseList = () => {
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
       setShowCourseCatalog(false);
       setEditCourse(null);
-      setSelectedCourse(null);
     } catch (error) {
+      console.error('Course Catalog Submit Error:', error);
       setToast({
         showToast: true,
         isError: true,
         title: 'Error',
-        message: error.message,
+        message: error.response?.data?.error || error.message || 'Failed to save courses',
         icon: deleteToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
@@ -193,129 +287,125 @@ const CourseList = () => {
 
   const handleMainEditFormSubmit = async (e) => {
     e.preventDefault();
+
+    if (!editCourse || !editCourse.uniqueId) {
+      console.error("No course selected for editing or missing ID. Current editCourse:", editCourse);
+      setToast({
+        showToast: true,
+        isError: true,
+        title: 'Error',
+        message: 'No course selected for editing. Please try again.',
+        icon: deleteToastIcon,
+      });
+      setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+      return;
+    }
+
     try {
-      const updatedCourse = {
-        id: e.target.courseCode.value,
-        name: e.target.courseName.value,
-        status: e.target.status.value,
-        details: [{
-          uniqueId: editCourse.details?.[0]?.uniqueId || '',
-          grade: e.target.grade.value,
-          fees: e.target.fees.value,
-          status: e.target.status.value,
-        }],
-        branch_id: 1,
+      setIsUpdating(true);
+
+      const courseCode = e.target.courseCode.value.trim();
+      const courseName = e.target.courseName.value.trim();
+      const status = e.target.status.value;
+
+      if (!courseCode || !courseName) {
+        throw new Error("Course code and name are required");
+      }
+
+      const payload = {
+        course_code: courseCode,
+        name: courseName,
+        status: status,
       };
-      await updateCourse(editCourse.uniqueId, updatedCourse);
-      setCourses((prevCourses) =>
-        prevCourses.map((course) =>
-          course.uniqueId === editCourse.uniqueId ? updatedCourse : course
-        )
-      );
+
+      console.log("Update payload:", payload);
+      console.log("Sending PATCH to:", `/course/${editCourse.uniqueId}`);
+
+      await updateCourse(editCourse.uniqueId, payload);
+      await refreshCourses();
+
       setToast({
         showToast: true,
         isError: false,
         isDelete: false,
         title: 'Success',
-        message: 'Course details have been changed',
+        message: 'Course details updated successfully',
         icon: successToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
       setEditCourse(null);
     } catch (error) {
+      console.error('Update error:', error);
       setToast({
         showToast: true,
         isError: true,
         title: 'Error',
-        message: error.message,
+        message: error.message || 'Failed to update course',
         icon: deleteToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleDetailEditFormSubmit = async (e) => {
     e.preventDefault();
     try {
-      const updatedDetail = {
-        uniqueId: detailEditCourse.uniqueId,
-        grade: e.target.grade.value,
-        fees: e.target.fees.value,
-        status: e.target.status.value,
+      setIsUpdating(true);
+      const grade = e.target.grade.value.trim();
+      const fees = e.target.fees.value.trim();
+      const courseId = detailEditCourse.courseUniqueId;
+      const gradeId = detailEditCourse.id;
+      const gradeFeeId = detailEditCourse.gradeFeeId;
+      const branchId = detailEditCourse.branchId || '1';
+
+      console.log("DetailEditCourse:", detailEditCourse);
+
+      if (!grade || !fees || isNaN(parseFloat(fees)) || parseFloat(fees) <= 0) {
+        throw new Error('Valid grade and fees are required');
+      }
+
+      const payload = {
+        gradeId: gradeId,
+        grade: grade,
+        fees: fees,
+        gradeFeeId: gradeFeeId,
+        branchId: branchId
       };
-      const updatedCourse = {
-        ...selectedCourse,
-        details: selectedCourse.details.map((detail) =>
-          detail.uniqueId === detailEditCourse.uniqueId ? updatedDetail : detail
-        ),
-        branch_id: 1,
-      };
-      await updateCourse(selectedCourse.uniqueId, updatedCourse);
-      setCourses((prevCourses) =>
-        prevCourses.map((course) =>
-          course.uniqueId === selectedCourse.uniqueId ? updatedCourse : course
-        )
-      );
+
+      await updateGrade(courseId, payload);
+      
+      const updatedCourses = await refreshCourses();
+      
+      if (selectedCourse) {
+        const newGroups = groupCourses(updatedCourses);
+        const updatedGroup = newGroups.find(g => g.id === selectedCourse.id);
+        setSelectedCourse(updatedGroup || null);
+      }
+
       setToast({
         showToast: true,
         isError: false,
         isDelete: false,
         title: 'Success',
-        message: 'Course details have been changed.',
+        message: 'Grade details updated successfully',
         icon: successToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
       setDetailEditCourse(null);
-      setSelectedCourse(null);
     } catch (error) {
+      console.error('Detail update error:', error);
       setToast({
         showToast: true,
         isError: true,
         title: 'Error',
-        message: error.message,
+        message: error.response?.data?.error || error.message || 'Failed to update grade details',
         icon: deleteToastIcon,
       });
       setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
-    }
-  };
-
-  const handleDetailDeleteConfirm = async (courseUniqueId, gradeFeeId) => {
-    try {
-      if (!gradeFeeId) {
-        throw new Error('Invalid grade fee ID');
-      }
-      
-      await deleteCourseDetail(courseUniqueId, gradeFeeId);
-      setCourses(prev => prev.map(course => 
-        course.uniqueId === courseUniqueId
-          ? {
-              ...course,
-              details: course.details.filter(
-                detail => detail.gradeFeeId !== gradeFeeId.toString()
-              )
-            }
-          : course
-      ));
-      setShowDeleteConfirm(null);
-      setSelectedCourse(null);
-      setToast({
-        showToast: true,
-        isError: false,
-        isDelete: true,
-        title: 'Success',
-        message: 'Course detail deleted successfully',
-        icon: deleteToastIcon,
-      });
-      setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
-    } catch (error) {
-      setToast({
-        showToast: true,
-        isError: true,
-        title: 'Error',
-        message: error.message,
-        icon: deleteToastIcon,
-      });
-      setTimeout(() => setToast((prev) => ({ ...prev, showToast: false })), 3000);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -338,19 +428,17 @@ const CourseList = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editCourse, detailEditCourse]);
 
-  const filteredCourses = courses.filter((course) => {
-    const matchesSearch =
-      course.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.status?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCourse = courseFilter ? course.name === courseFilter : true;
-    const matchesStatus = statusFilter ? course.status === statusFilter : true;
-    return matchesSearch && matchesCourse && matchesStatus;
-  });
-
-  const getCourseDetails = (course) => {
-    return course?.details || [];
-  };
+  const filteredCourses = useMemo(() => {
+    return groupedCourses.filter((course) => {
+      const matchesSearch =
+        course.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.status?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCourse = courseFilter ? course.name === courseFilter : true;
+      const matchesStatus = statusFilter ? course.status === statusFilter : true;
+      return matchesSearch && matchesCourse && matchesStatus;
+    });
+  }, [groupedCourses, searchTerm, courseFilter, statusFilter]);
 
   return (
     <div className="table-container" ref={wrapperRef}>
@@ -425,7 +513,7 @@ const CourseList = () => {
           </thead>
           <tbody>
             {filteredCourses.map((course, index) => (
-              <tr key={course.uniqueId || `course-${index}`}>
+              <tr key={`${course.id}-${index}`}>
                 <td>{course.id}</td>
                 <td>{course.name}</td>
                 <td>{course.status}</td>
@@ -442,7 +530,7 @@ const CourseList = () => {
             ))}
           </tbody>
         </table>
-        {selectedCourse && (
+        {selectedCourse && !showDeleteConfirm && (
           <div className="course-details-popup1">
             <div className="popup-content1">
               <img
@@ -452,35 +540,40 @@ const CourseList = () => {
                 onClick={() => setSelectedCourse(null)}
               />
               <p>
-                <strong>Course Code</strong><strong>: {selectedCourse.id}</strong>
+                <strong>Course Code: </strong>{selectedCourse.id}
               </p>
               <p>
-                <strong>Course</strong><strong>: {selectedCourse.name}</strong>
+                <strong>Course: </strong>{selectedCourse.name}
+              </p>
+              <p>
+                <strong>Status: </strong>{selectedCourse.status}
               </p>
               <div className="details-table">
                 <table>
                   <thead>
                     <tr>
                       <th>Grade</th>
-                      <th>Status</th>
                       <th>Fees(Rs)</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getCourseDetails(selectedCourse).map((detail, index) => (
-                      <tr key={detail.uniqueId || `detail-${index}`}>
-                        <td>{detail.grade}</td>
-                        <td>{detail.status}</td>
-                        <td>{detail.fees}</td>
+                    {selectedCourse.allGrades.map((detail, index) => (
+                      <tr key={`${detail.courseUniqueId}-${detail.gradeFeeId}-${index}`}>
+                        <td>{detail.grade || 'N/A'}</td>
+                        <td>{detail.fees || '0'}</td>
                         <td className="action-icons1">
                           <CourseActions
-                            course={{ ...detail, courseUniqueId: selectedCourse.uniqueId, gradeFeeId: detail.gradeFeeId }}
+                            course={{ 
+                              ...detail, 
+                              courseUniqueId: detail.courseUniqueId,
+                              gradeFeeId: detail.gradeFeeId,
+                              id: detail.uniqueId || detail.id,
+                              branchId: detail.branchId || '1'
+                            }}
                             setSelectedCourse={setSelectedCourse}
                             setEditCourse={setDetailEditCourse}
-                            setShowDeleteConfirm={(id) =>
-                              setShowDeleteConfirm({ courseId: selectedCourse.uniqueId, detailId: id })
-                            }
+                            setShowDeleteConfirm={setShowDeleteConfirm}
                             hideView={true}
                             isDetailView={true}
                           />
@@ -523,21 +616,10 @@ const CourseList = () => {
                       required
                     />
                   </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Grade</label>
-                    <input
-                      type="text"
-                      name="grade"
-                      defaultValue={editCourse.details?.[0]?.grade || ''}
-                      required
-                    />
-                  </div>
                   <div className="form-group">
                     <label>Status</label>
-                    <select 
-                      name="status" 
+                    <select
+                      name="status"
                       defaultValue={editCourse.status || 'Active'}
                       required
                     >
@@ -549,19 +631,8 @@ const CourseList = () => {
                     </select>
                   </div>
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Fees</label>
-                    <input
-                      type="text"
-                      name="fees"
-                      defaultValue={editCourse.details?.[0]?.fees || ''}
-                      required
-                    />
-                  </div>
-                </div>
-                <button type="submit" className="update-button">
-                  Update
+                <button type="submit" className="update-button" disabled={isUpdating}>
+                  {isUpdating ? 'Updating...' : 'Update'}
                 </button>
               </form>
             </div>
@@ -576,7 +647,7 @@ const CourseList = () => {
                 className="close-btn"
                 onClick={() => setDetailEditCourse(null)}
               />
-              <h3>Edit Course Detail</h3>
+              <h3>Edit Grade</h3>
               <form onSubmit={handleDetailEditFormSubmit}>
                 <div className="form-row">
                   <div className="form-group">
@@ -589,22 +660,6 @@ const CourseList = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Status</label>
-                    <select 
-                      name="status" 
-                      defaultValue={detailEditCourse.status || 'Active'}
-                      required
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
                     <label>Fees</label>
                     <input
                       type="text"
@@ -614,8 +669,8 @@ const CourseList = () => {
                     />
                   </div>
                 </div>
-                <button type="submit" className="update-button1">
-                  Update
+                <button type="submit" className="update-button1" disabled={isUpdating}>
+                  {isUpdating ? 'Updating...' : 'Update'}
                 </button>
               </form>
             </div>
@@ -624,11 +679,13 @@ const CourseList = () => {
         <DeleteConfirmModal
           isOpen={!!showDeleteConfirm}
           onClose={handleDeleteCancel}
-          onDelete={() =>
-            typeof showDeleteConfirm === 'object'
-              ? handleDetailDeleteConfirm(showDeleteConfirm.courseId, showDeleteConfirm.detailId)
-              : handleDeleteConfirm(showDeleteConfirm)
-          }
+          onDelete={() => {
+            if (typeof showDeleteConfirm === 'string') {
+              handleGroupDelete(showDeleteConfirm);
+            } else if (showDeleteConfirm && showDeleteConfirm.courseId && showDeleteConfirm.detailId) {
+              handleDetailDeleteConfirm(showDeleteConfirm.courseId, showDeleteConfirm.detailId);
+            }
+          }}
         />
         {showCourseCatalog && (
           <CourseCatalog
@@ -636,13 +693,12 @@ const CourseList = () => {
             onClose={handleCourseCatalogClose}
             initialCourse={
               editCourse
-                ? { 
-                    ...editCourse, 
-                    id: editCourse.id, 
-                    name: editCourse.name, 
-                    grade: editCourse.details?.[0]?.grade, 
-                    fees: editCourse.details?.[0]?.fees, 
-                    status: editCourse.status 
+                ? {
+                    id: editCourse.id,
+                    name: editCourse.name,
+                    grade: editCourse.allGrades?.[0]?.grade || '',
+                    fees: editCourse.allGrades?.[0]?.fees?.toString() || '',
+                    status: editCourse.status,
                   }
                 : null
             }

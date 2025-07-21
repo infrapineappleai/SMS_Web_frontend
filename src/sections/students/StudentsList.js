@@ -1,18 +1,12 @@
-
-
-
-
-
 import React, { useState, useEffect, useMemo } from "react";
 import StudentProfilePopup from "./StudentProfilePopup";
 import "../../Styles/Students-css/StudentsList.css";
 import { getAllStudents, deleteStudent } from "../../integration/studentAPI";
 import { useToast } from "../../modals/ToastProvider";
+import AddStudentForm from "../students/AddStudentForm";
 
-// ✅ Base URL for backend uploads folder
-const baseImageUrl = "https://pineappleai.cloud/api/sms/uploads/";
+const baseImageUrl = "http://localhost:5000/uploads/";
 
-// ✅ Validate URL or data URI
 const isValidImageUrl = (url) => {
   if (!url || typeof url !== "string") return false;
 
@@ -28,12 +22,10 @@ const isValidImageUrl = (url) => {
   );
 };
 
-// ✅ Image component with URL normalization
 const StudentImage = ({ photo_url, first_name, last_name }) => {
   let fullImageUrl = "";
 
   if (photo_url) {
-    // If it's a relative path like "/Uploads/..." (case insensitive), normalize it
     if (!photo_url.startsWith("http") && !photo_url.startsWith("data:image/")) {
       fullImageUrl = baseImageUrl + photo_url.replace(/^\/?Uploads\//i, "");
     } else {
@@ -71,32 +63,70 @@ const StudentsList = ({ onEditStudent, onDeleteStudent }) => {
   const [students, setStudents] = useState([]);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [editStudentData, setEditStudentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const fetchedStudents = await getAllStudents();
-        setStudents(fetchedStudents);
-      } catch (err) {
-        const message = err.message || "Failed to fetch students";
-        setError(message);
-        showToast({ title: "Error", message, isError: true });
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const fetchedStudents = await getAllStudents();
+      console.log("StudentsList: Fetched students:", fetchedStudents);
+      setStudents(fetchedStudents || []);
+    } catch (err) {
+      const message = err.message || "Failed to fetch students";
+      setError(message);
+      showToast({ title: "Error", message, isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+ 
+  useEffect(() => {
     fetchStudents();
-  }, [showToast]);
+  }, []);  
 
   const handleProfileClick = (student) => {
     setSelectedStudent(student);
     setIsPopupOpen(true);
+  };
+
+  const handleEdit = (studentData) => {
+    console.log(
+      "StudentsList: Opening AddStudentForm for editing with data=",
+      JSON.stringify(studentData, null, 2)
+    );
+    setEditStudentData(studentData);
+    setIsEditFormOpen(true);
+    setIsPopupOpen(false);
+    if (onEditStudent) {
+      onEditStudent(studentData);
+    }
+  };
+
+  const handleFormSave = async (updatedStudent) => {
+    console.log(
+      "StudentsList: handleFormSave updatedStudent=",
+      JSON.stringify(updatedStudent, null, 2)
+    );
+    try {
+       await fetchStudents(); 
+      showToast({ title: "Success", message: "Student saved successfully!" });
+      setIsEditFormOpen(false);
+      setEditStudentData(null);
+
+    } catch (error) {
+      console.error("StudentsList: Error in handleFormSave:", error);
+      showToast({
+        title: "Error",
+        message: error.message || "Failed to save student",
+        isError: true,
+      });
+    }
   };
 
   const handleDeleteClick = async (e, studentId) => {
@@ -104,14 +134,12 @@ const StudentsList = ({ onEditStudent, onDeleteStudent }) => {
     if (window.confirm("Are you sure you want to delete this student?")) {
       try {
         await deleteStudent(studentId);
-        setStudents((prev) =>
-          prev.filter((student) => student.id !== studentId)
-        );
         showToast({
           title: "Success",
           message: "Student deleted successfully!",
         });
         if (onDeleteStudent) onDeleteStudent(studentId);
+        await fetchStudents(); // Refresh the list after deletion
       } catch (err) {
         showToast({
           title: "Error",
@@ -168,13 +196,14 @@ const StudentsList = ({ onEditStudent, onDeleteStudent }) => {
                   onClick={(e) => handleDeleteClick(e, student.id)}
                   style={{
                     position: "absolute",
-                    top: "10px",
-                    right: "10px",
-                    background: "red",
+                    top: "8px",
+                    right: "8px",
+                    backgroundColor: "red",
                     color: "white",
                     border: "none",
+                    padding: "4px 8px",
                     borderRadius: "4px",
-                    padding: "5px",
+                    cursor: "pointer",
                   }}
                 >
                   Delete
@@ -189,8 +218,22 @@ const StudentsList = ({ onEditStudent, onDeleteStudent }) => {
         isOpen={isPopupOpen}
         onClose={() => setIsPopupOpen(false)}
         studentData={selectedStudent}
-        onEdit={onEditStudent}
+        onEdit={handleEdit}
+        onSave={handleFormSave}
       />
+      {isEditFormOpen && editStudentData && (
+        <AddStudentForm
+          isOpen={isEditFormOpen}
+          onClose={() => {
+            console.log("StudentsList: Closing AddStudentForm");
+            setIsEditFormOpen(false);
+            setEditStudentData(null);
+          }}
+          onAddStudent={handleFormSave}
+          initialData={editStudentData}
+          isEditMode={true}
+        />
+      )}
     </div>
   );
 };
