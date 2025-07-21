@@ -11,7 +11,7 @@ import Step2Courses from '../payments/stepper/Step2Courses';
 import Step3PaymentInfo from '../payments/stepper/Step3PaymentInfo';
 import StepperHeader from '../payments/stepper/StepperHeader';
 import PendingModal from '../payments/models/PendingModal';
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
 
 const PaymentTable = ({ selectedState: propSelectedState = 'State' }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);

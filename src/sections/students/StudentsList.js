@@ -5,7 +5,7 @@ import { getAllStudents, deleteStudent } from "../../integration/studentAPI";
 import { useToast } from "../../modals/ToastProvider";
 import AddStudentForm from "../students/AddStudentForm";
 
-const baseImageUrl = "http://localhost:5000/uploads/";
+const baseImageUrl = "https://pineappleai.cloud/api/sms/api/uploads/";
 
 const isValidImageUrl = (url) => {
   if (!url || typeof url !== "string") return false;
