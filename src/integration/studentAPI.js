@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_URL = 'https://pineappleai.cloud/api/sms/api';
+const IMAGE_BASE_URL = 'https://pineappleai.cloud/uploads/students/';
 
 export const getDropdownOptions = async (type, params = {}) => {
   try {
@@ -51,7 +52,7 @@ export const getStudentSlots = async (studentId) => {
     console.log(`Slots response for student ${studentId}:`, JSON.stringify(response.data, null, 2));
     return response.data.map(slot => {
       const day = slot.day || 'N/A';
-      const startTime = slot.st_time || '';
+      const startTime = slot.st_time || slot.start_time || '';
       const endTime = slot.end_time || '';
       const time = startTime && endTime ? `${startTime}-${endTime}` : 'N/A';
       return {
@@ -126,12 +127,16 @@ export const createStudent = async (data) => {
 
     const userDetails = JSON.parse(data.get('user') || '{}');
 
+    const photoUrl = response.data.photo_url
+      ? `${IMAGE_BASE_URL}${response.data.photo_url}`
+      : '/default-avatar.png';
+
     return {
       ...response.data,
       user_id: studentId,
       ...userDetails,
       ...studentDetails,
-      photo_url: response.data.photo_url || '/default-avatar.png',
+      photo_url: photoUrl,
       assignedCourses,
       schedules: slots,
       branch: branches.length > 0 ? branches[0].branch_name : 'N/A',
@@ -173,7 +178,10 @@ export const uploadStudentPhoto = async (userId, photoFile) => {
     });
 
     console.log('Photo uploaded successfully:', response.data);
-    return response.data;
+    const photoUrl = response.data.photo_url
+      ? `${IMAGE_BASE_URL}${response.data.photo_url}`
+      : '/default-avatar.png';
+    return { ...response.data, photo_url: photoUrl };
   } catch (error) {
     console.error('Error uploading photo:', error.response?.data || error.message);
     throw new Error(error.response?.data?.error || 'Failed to upload photo');
@@ -203,11 +211,15 @@ export const updateStudent = async (userId, data) => {
     const studentDetails = JSON.parse(data.get('student_details') || '{}');
     const userDetails = JSON.parse(data.get('user') || '{}');
 
+    const photoUrl = response.data.photo_url || studentDetails.photo_url
+      ? `${IMAGE_BASE_URL}${response.data.photo_url || studentDetails.photo_url}`
+      : '/default-avatar.png';
+
     const result = {
       ...userDetails,
       ...studentDetails,
       user_id: userId,
-      photo_url: response.data.photo_url || studentDetails.photo_url || '/default-avatar.png',
+      photo_url: photoUrl,
       assignedCourses,
       schedules: slots,
       branch: branches.length > 0 ? branches[0].branch_name : 'N/A',
@@ -243,15 +255,19 @@ export const getAllStudents = async () => {
             .map(grade => courseMap.get(grade.Grade?.Course?.id))
             .filter(Boolean);
 
+          const photoUrl = profile.data.StudentDetail?.photo_url
+            ? `${IMAGE_BASE_URL}${profile.data.StudentDetail.photo_url}`
+            : '/default-avatar.png';
+
           const studentData = {
             ...student,
             student_no: profile.data.StudentDetail?.student_no || 'N/A',
-            photo_url: profile.data.StudentDetail?.photo_url || null,
+            photo_url: photoUrl,
             salutation: profile.data.StudentDetail?.salutation || '',
             ice_contact: profile.data.StudentDetail?.ice_contact || 'N/A',
             student_details: {
               student_no: profile.data.StudentDetail?.student_no || 'N/A',
-              photo_url: profile.data.StudentDetail?.photo_url || null,
+              photo_url: photoUrl,
               salutation: profile.data.StudentDetail?.salutation || '',
               ice_contact: profile.data.StudentDetail?.ice_contact || 'N/A',
             },
@@ -273,6 +289,7 @@ export const getAllStudents = async () => {
             assignedCourses: [],
             schedules: [],
             branch: "N/A",
+            photo_url: '/default-avatar.png',
           };
         }
       })
@@ -326,7 +343,9 @@ export const filterStudents = async (filters) => {
 export const filterStudentsByCourse = async (courseId) => {
   try {
     const students = await getAllStudents();
-    return students;
+    return students.filter(student =>
+      student.assignedCourses.some(course => course.course === courseId)
+    );
   } catch (error) {
     console.error('Error filtering students by course:', error.message);
     throw new Error(error.message || 'Failed to filter students by course');
