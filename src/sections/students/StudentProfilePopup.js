@@ -37,7 +37,7 @@ const StudentProfilePopup = ({
   const getFullImageUrl = (url) => {
     if (!url) return "/default-avatar.png";
     if (url.startsWith("http") || url.startsWith("data:image/")) return url;
-    return `https://pineappleai.cloud/api/sms/api/uploads/${url.replace(/^\/?Uploads\//i, "")}`;
+    return `https://pineappleai.cloud/uploads/students/${url.replace(/^\/?Uploads\//i, "")}`;
   };
 
   const profileImageUrl = getFullImageUrl(studentData.photo_url);

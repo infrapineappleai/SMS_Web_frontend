@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../../../Styles/payment/stepper/Step2Courses.css'; // Ensure this CSS file exists
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
 
 const Step2Courses = ({ student_no,student_details_id, onMonthSelect }) => {
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import '../../../Styles/payment/PaymentDetailsModal.css';
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
 
 const PaymentDetailsModal = ({ isOpen, onClose, paymentData }) => {
   const [paymentHistory, setPaymentHistory] = useState([]);

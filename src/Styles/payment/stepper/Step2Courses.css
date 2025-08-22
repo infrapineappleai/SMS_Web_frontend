@@ -1,5 +1,10 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+.step-container {
+  max-height: 600px; /* Adjust as needed for your layout */
+  overflow-y: auto; /* Enables vertical scrolling */
+  overflow-x: hidden; /* Prevents horizontal scrolling */
+}
 
 .courses-fees-header h4 {
   font-size: 18px;

@@ -5,8 +5,10 @@ import studentAvatar from '../../../assets/images/image1.jpg';
 import FrameIcon from '../../../assets/icons/Frame.png';
 import user from '../../../assets/icons/user_2_fill.png';
 import whatsapp from '../../../assets/icons/whatsapp_fill.png';
+import branch from '../../../assets/icons/Branch.png';
 
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api"; // Base URL for API and images
+
+const API_BASE_URL = "https://pineappleai.cloud/api/sms"; // Base URL for API and images
 
 const Step1StudentsDetails = ({ onStudentSelect }) => {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -162,7 +164,9 @@ const Step1StudentsDetails = ({ onStudentSelect }) => {
                   </div>
                 </div>
                 <div className="student-card-info-container">
-                 
+                 <div className="icon-container">
+                    <img src={branch} alt="Icon" className="icon-style" />
+                  </div>
                   <div className="details-container">
                     <p><strong>Branch</strong></p>
                     <p className="p-a">{student.branch_name}</p>

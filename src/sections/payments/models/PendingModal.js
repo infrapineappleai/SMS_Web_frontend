@@ -3,7 +3,7 @@ import axios from 'axios';
 import Close from '../../../assets/icons/Vector.png';
 import '../../../Styles/payment/Models/PendingModal.css';
 
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
 
 const PendingModal = ({ isOpen, onClose, paymentData }) => {
   const [pendingPayments, setPendingPayments] = useState([]);

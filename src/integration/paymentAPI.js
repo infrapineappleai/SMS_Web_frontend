@@ -3,7 +3,7 @@ import Step1StudentsDetails from '../sections/payments/stepper/Step1StudentsDeta
 import Step2Courses from '../sections/payments/stepper/Step2Courses';
 import Step3PaymentInfo from '../sections/payments/stepper/Step3PaymentInfo';
 import axios from 'axios';
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
 
 
 const PaymentAPI = ({ isOpen, onClose, onPaymentSuccess }) => {

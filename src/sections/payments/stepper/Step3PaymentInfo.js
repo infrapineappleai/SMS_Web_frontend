@@ -4,7 +4,7 @@ import '../../../Styles/payment/stepper/Step3PaymentInfo.css';
 import user from '../../../assets/icons/user-solid.svg';
 import user_address from '../../../assets/icons/address-card-solid.svg';
 import location from '../../../assets/icons/location-dot-solid.svg';
-const API_BASE_URL = "https://pineappleai.cloud/api/sms/api/api";
+const API_BASE_URL = "https://pineappleai.cloud/api/sms/api";
 
 const Step3PaymentInfo = ({ selectedStudent, onSelectPayment }) => {
   const [loading, setLoading] = useState(true);
